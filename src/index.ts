@@ -93,7 +93,11 @@ export function createSightline(options: SightlineOptions = {}): Sightline {
   const capture = (overrides: Partial<OutlineOptions> = {}) => {
     captures += 1;
     if (captures % 50 === 0) registry.prune();
-    return outline(doc, { refs: true, ...outlineOptions, ...overrides }, registry);
+    return outline(
+      doc,
+      { refs: true, ...outlineOptions, ...overrides },
+      registry,
+    );
   };
 
   const find = (target: string, role?: string | null) => {
@@ -107,7 +111,9 @@ export function createSightline(options: SightlineOptions = {}): Sightline {
     find,
     highlight(target, highlightOptions = {}) {
       const element =
-        typeof target === 'string' ? find(target, highlightOptions.role) : target;
+        typeof target === 'string'
+          ? find(target, highlightOptions.role)
+          : target;
       if (!element) return false;
       highlight(element, highlightOptions);
       return true;

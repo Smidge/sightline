@@ -26,16 +26,34 @@ it('keeps refs stable across insertion, reorder and renaming; removed elements r
   expect(registry.resolve('e999')).toBeNull();
 });
 
-it('assigns actionable refs in navigation and tab summaries', () => {
+it('lists navigation and tab items one per line when refs are on', () => {
+  // A model reading several "Name [ref=eN]" pairs on one line picked the
+  // wrong ref in live testing, so each item gets its own line.
   document.body.innerHTML =
-    '<nav><a href="/">Home</a></nav><div role="tablist"><button role="tab">Settings</button></div>';
-  const result = outline(document, { refs: true, header: false })!;
+    '<nav><a href="/" aria-current="page">Home</a><a href="/docs">Docs</a></nav><div role="tablist"><button role="tab" aria-selected="true">Settings</button></div>';
+  const result = outline(document, {
+    refs: true,
+    header: false,
+    location: { pathname: '/', origin: 'https://example.test' },
+  })!;
   expect(result.lines).toEqual([
-    'navigation: Home [ref=e1]',
-    'tabs: Settings [ref=e2]',
+    'navigation',
+    '  link "Home" → / [current] [ref=e1]',
+    '  link "Docs" → /docs [ref=e2]',
+    'tabs',
+    '  tab "Settings" [selected] [ref=e3]',
   ]);
   expect(result.refs.get('e1')).toBe(document.querySelector('a'));
-  expect(result.refs.get('e2')).toBe(document.querySelector('button'));
+  expect(result.refs.get('e3')).toBe(document.querySelector('button'));
+});
+
+it('keeps the compact one-line navigation and tabs without refs', () => {
+  document.body.innerHTML =
+    '<nav><a href="/">Home</a><a href="/docs">Docs</a></nav><div role="tablist"><button role="tab" aria-selected="true">Settings</button></div>';
+  expect(outline(document, { header: false })!.lines).toEqual([
+    'navigation: Home · Docs',
+    'tabs: Settings [selected]',
+  ]);
 });
 
 it.each([

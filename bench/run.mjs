@@ -88,7 +88,11 @@ try {
     await page.addScriptTag({ path: bundle });
     const result = await page.evaluate((maxChars) => {
       for (let i = 0; i < 3; i++)
-        window.Sightline.outline(document, { refs: true, viewport: true, maxChars });
+        window.Sightline.outline(document, {
+          refs: true,
+          viewport: true,
+          maxChars,
+        });
       const samples = [];
       let chars = 0;
       for (let i = 0; i < 20; i++) {

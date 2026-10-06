@@ -749,11 +749,7 @@ function walkChildren(element: Element, depth: number, walk: Walk) {
         seen.set(key, index);
         if (index > walk.repeatKeep) {
           if (index === total)
-            add(
-              walk,
-              depth,
-              `… ${total - walk.repeatKeep} more similar items`,
-            );
+            add(walk, depth, `… ${total - walk.repeatKeep} more similar items`);
           continue;
         }
       }
@@ -803,47 +799,57 @@ function walkElement(element: Element, depth: number, walk: Walk) {
       return;
     }
     case 'navigation': {
-      const items = visibleDescendants(
+      const found = visibleDescendants(
         element,
         'a[href], button, [role="button"], [role="link"], [role="tab"]',
         ctx,
-      )
+      );
+      const name = nameOf(element, ctx);
+      if (walk.refs) {
+        // With refs, one control per line: a model reading "A [ref=e8] · B
+        // [ref=e9] · C [ref=e10]" on one line picks the wrong ref.
+        if (!found.length) return;
+        add(walk, depth, `navigation${name ? ` ${quote(name)}` : ''}`);
+        for (const item of found) {
+          const role = roleOf(item) ?? 'link';
+          add(walk, depth + 1, controlLine(item, role, walk));
+        }
+        return;
+      }
+      const items = found
         .map((item) => {
-          const name = nameOf(item, ctx);
+          const itemName = nameOf(item, ctx);
           const current = item.getAttribute('aria-current');
-          let label =
-            name && current && current !== 'false' ? `${name} [current]` : name;
-          if (label && walk.refs) {
-            const ref = walk.refs.refFor(item);
-            walk.refMap.set(ref, item);
-            label += ` [ref=${ref}]`;
-          }
-          return label;
+          return itemName && current && current !== 'false'
+            ? `${itemName} [current]`
+            : itemName;
         })
         .filter(Boolean);
-      const name = nameOf(element, ctx);
       if (items.length)
         add(
           walk,
           depth,
-          `navigation${name && !items.some((item) => item.startsWith(name)) ? ` ${quote(name)}` : ''}: ${items.join(' · ')}`,
+          `navigation${name && !items.includes(name) ? ` ${quote(name)}` : ''}: ${items.join(' · ')}`,
         );
       return;
     }
     case 'tablist': {
-      const tabs = visibleDescendants(element, '[role="tab"]', ctx).map((tab) => {
-        const states = controlStates(tab, 'tab').filter(
-          (state) => state === 'selected' || state === 'disabled',
-        );
-        let label = `${nameOf(tab, ctx)}${states.length ? ` [${states.join(', ')}]` : ''}`;
-        if (walk.refs) {
-          const ref = walk.refs.refFor(tab);
-          walk.refMap.set(ref, tab);
-          label += ` [ref=${ref}]`;
+      const found = visibleDescendants(element, '[role="tab"]', ctx);
+      if (walk.refs) {
+        if (found.length) {
+          add(walk, depth, 'tabs');
+          for (const tab of found)
+            add(walk, depth + 1, controlLine(tab, 'tab', walk));
         }
-        return label;
-      });
-      if (tabs.length) add(walk, depth, `tabs: ${tabs.join(' | ')}`);
+      } else {
+        const tabs = found.map((tab) => {
+          const states = controlStates(tab, 'tab').filter(
+            (state) => state === 'selected' || state === 'disabled',
+          );
+          return `${nameOf(tab, ctx)}${states.length ? ` [${states.join(', ')}]` : ''}`;
+        });
+        if (tabs.length) add(walk, depth, `tabs: ${tabs.join(' | ')}`);
+      }
       walk.tablists.add(element);
       walkChildren(element, depth, walk);
       return;
@@ -916,11 +922,7 @@ function walkElement(element: Element, depth: number, walk: Walk) {
     if (role === 'dialog' || role === 'alertdialog') {
       const description = referencedText(element, 'aria-describedby', ctx);
       if (description)
-        add(
-          walk,
-          depth + 1,
-          `text ${quote(clip(ctx, description, TEXT_MAX))}`,
-        );
+        add(walk, depth + 1, `text ${quote(clip(ctx, description, TEXT_MAX))}`);
     }
     walkChildren(element, depth + 1, walk);
     // An empty landmark (like a toast region with no toasts) is noise.

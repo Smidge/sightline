@@ -87,7 +87,8 @@ export function describeElement(
   const start = target as Element;
   if (options.skip && start.closest(options.skip)) return null;
   const control =
-    start.closest('[contenteditable="true"]') ?? start.closest(FINDABLE_SELECTOR);
+    start.closest('[contenteditable="true"]') ??
+    start.closest(FINDABLE_SELECTOR);
   if (!control) return null;
   const ctx = createContext(doc ?? control.ownerDocument, {
     skip: options.skip,
