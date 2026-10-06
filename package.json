@@ -1,0 +1,44 @@
+{
+  "name": "@anam-ai/sightline",
+  "version": "0.1.0",
+  "description": "What's on screen, as text an LLM agent can use. Runs in the page, reads the accessibility tree like a screen reader, never reads typed values.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "bench": "node bench/run.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "accessibility",
+    "llm",
+    "agent",
+    "screen-reader",
+    "aria",
+    "outline",
+    "dom"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.25.3",
+    "happy-dom": "^20.0.0",
+    "playwright": "^1.56.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.11"
+  },
+  "packageManager": "pnpm@10.32.1"
+}
