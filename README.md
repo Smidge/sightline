@@ -87,6 +87,7 @@ Lower-level functions are exported too: `outline(document, options)`, `findContr
 | `redact`                   | none                        | Extra redaction for every name and text excerpt                 |
 | `hintAttribute`            | `data-testid`               | Quoted for a control with no name and no nearby text            |
 | `repeatMin` / `repeatKeep` | 8 / 3                       | When and how far repeated items are shortened                   |
+| `infer`                    | `false`                     | Also read pages built without semantic HTML (see below)         |
 
 ### Watching
 
@@ -107,7 +108,31 @@ Long runs of similar items are counted and skipped, not walked. Cost therefore f
 
 ## Accessible names are the contract
 
-Sightline sees what a screen reader sees. An icon button with no `aria-label` reaches the agent as `button near "…"` (named from the text beside it) or `button (unlabelled)`. Naming your controls properly makes the agent accurate, and it's good accessibility practice anyway.
+Sightline sees what a screen reader sees. An icon button with no `aria-label` reaches the agent as `button near "…"` (named from the text beside it) or `button (unlabelled)`. Naming your controls properly makes the agent accurate, and it's good accessibility practice anyway. For pages you don't control, `infer` fills some of the gaps with marked guesses.
+
+## Pages without semantic HTML
+
+Many sites build buttons from plain divs with a click handler, leave icon buttons unnamed, and fake headings and modals with styling. With `infer: true`, Sightline reads those as a sighted user would.
+
+- An element that reacts to clicks without a button or link role is listed as `clickable "Add to bag"`. Sightline counts an `onclick` attribute or property, React (`__reactProps$…`) and Vue click props, jQuery handlers, and the element where a pointer cursor starts. It leaves out a wrapper around a real link or button, a container holding form fields, anything covering half the screen, and a clickable with nothing to call it.
+- A control with no name gets a guess, marked with its source, such as `button "close" (guessed from icon)`. The guess comes from a tooltip attribute, the icon inside (`fa-trash`, `lucide-x`, `<use href="#icon-cart">`, Material UI's `data-testid="DeleteIcon"`), an image file name, a test id, `name`, `id` or the class. A guess from a file name, id or class is kept only if it contains a word that says what the control does, so jargon like `tux-tooltip-reference` never reaches the model. A field takes the short text just before it (`<div>Email</div><input>`), and a control showing only `×` or `☰` reads as `close` or `menu`.
+- Short text set noticeably larger and bolder than the body text becomes a heading. Prices are left out.
+- A fixed element over the centre of the viewport that covers a fifth of it, holds something to click and isn't the whole app counts as an open dialog. Only the dialog is shown, as with a real modal, and `watch` reports it opening and closing.
+- Open shadow roots, their slots and same-origin frames are read. A frame from another site is listed by its title.
+
+`find`, `highlight`, `track` and `describeElement` use the same names, so an agent can ask to click "close" when the page shows `×`.
+
+Inference costs a computed-style read per element. Measured on live sites in Chromium 143, with `refs` and `viewport` on:
+
+| Page                                       |  Controls | Unnamed | Time         |
+| ------------------------------------------ | --------: | ------: | ------------ |
+| Deque's Mars Commuter (built inaccessible) | 103 → 111 |   7 → 3 | 5.5 → 7.0 ms |
+| University of Washington "before" demo     |   25 → 27 |   1 → 0 | 1.7 → 3.8 ms |
+| TikTok Explore                             |   23 → 28 |   6 → 6 | 1.7 → 4.5 ms |
+| AliExpress home                            |   80 → 82 |   0 → 0 | 2.8 → 4.2 ms |
+| BBC home (accessible)                      |   68 → 68 |   0 → 0 | 5.1 → 6.8 ms |
+
+On an accessible page inference adds nothing but time. Listeners added with `addEventListener` are invisible to page script, so a div with one and no pointer cursor stays unlisted.
 
 ## Development
 

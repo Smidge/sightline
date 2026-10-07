@@ -102,7 +102,11 @@ export function createSightline(options: SightlineOptions = {}): Sightline {
 
   const find = (target: string, role?: string | null) => {
     if (REF_RE.test(target.trim())) return registry.resolve(target.trim());
-    return findControl(target, { role, skip: outlineOptions.skip }, doc);
+    return findControl(
+      target,
+      { role, skip: outlineOptions.skip, infer: outlineOptions.infer },
+      doc,
+    );
   };
 
   return {
@@ -135,6 +139,7 @@ export function createSightline(options: SightlineOptions = {}): Sightline {
         {
           skip: outlineOptions.skip,
           hintAttribute: outlineOptions.hintAttribute,
+          infer: outlineOptions.infer,
           ...trackOptions,
         },
       );

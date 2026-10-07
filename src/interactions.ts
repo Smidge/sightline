@@ -20,6 +20,8 @@ export type TrackOptions = {
   hintAttribute?: string;
   /** Ignore a repeat of the same interaction within this time. Default 300 ms. */
   dedupeMs?: number;
+  /** Also report clicks on the clickable elements `infer` lists. */
+  infer?: boolean;
 };
 
 const TEXT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton', 'combobox']);

@@ -1,3 +1,15 @@
+import {
+  createInferState,
+  findOverlay,
+  guessName,
+  isClickTarget,
+  overlayName,
+  styledHeadingLevel,
+  symbolName,
+  textBefore,
+  type InferState,
+} from './infer';
+
 /**
  * A compact text outline of what a page shows, for an LLM agent. It walks the
  * DOM the way a screen reader does: roles, accessible names and states, open
@@ -45,6 +57,16 @@ export type OutlineOptions = {
   redact?: (text: string) => string;
   /** Attribute quoted for a control with no name and no nearby text. */
   hintAttribute?: string;
+  /**
+   * Also read pages that don't use semantic HTML. Elements that react to
+   * clicks without a button or link role are listed as `clickable`, a
+   * control with no name gets a guess from its icon, image, test id or class
+   * (`button "close" (guessed from icon)`), big bold text counts as a
+   * heading, a modal built from plain divs is shown on its own, and open
+   * shadow roots and same-origin frames are read. Costs a computed-style
+   * read per element. Default false.
+   */
+  infer?: boolean;
 };
 
 export type OutlineStats = {
@@ -85,6 +107,18 @@ const SKIPPED_TAGS = new Set([
 
 const TEXT_INPUT_ROLES = new Set(['textbox', 'searchbox', 'spinbutton']);
 
+/** Controls named by the text beside them rather than by an icon. */
+const FIELD_ROLES = new Set([
+  ...TEXT_INPUT_ROLES,
+  'combobox',
+  'listbox',
+  'checkbox',
+  'radio',
+  'switch',
+  'slider',
+  'file',
+]);
+
 export const CONTROL_ROLES = new Set([
   'button',
   'link',
@@ -103,6 +137,7 @@ export const CONTROL_ROLES = new Set([
   'option',
   'tab',
   'file',
+  'clickable',
 ]);
 
 const SECTION_ROLES = new Set([
@@ -135,6 +170,7 @@ const NAME_FROM_CONTENT = new Set([
   'tooltip',
   'label',
   'legend',
+  'clickable',
 ]);
 
 /** Elements a `<label for>` or wrapping `<label>` can name (HTML "labelable"). */
@@ -163,13 +199,15 @@ export type Context = {
   hintAttribute: string;
   /** label[for] targets, built on first use: one query instead of one per field. */
   labelsFor: Map<string, Element> | null;
+  /** Set when `infer` is on. */
+  infer: InferState | null;
 };
 
 export function createContext(
   doc: Document,
   options: Pick<
     OutlineOptions,
-    'skip' | 'keepEmail' | 'redact' | 'hintAttribute'
+    'skip' | 'keepEmail' | 'redact' | 'hintAttribute' | 'infer'
   > = {},
 ): Context {
   return {
@@ -179,7 +217,14 @@ export function createContext(
     redact: options.redact ?? null,
     hintAttribute: options.hintAttribute ?? 'data-testid',
     labelsFor: null,
+    infer: options.infer ? createInferState(doc) : null,
   };
+}
+
+/** Where ids resolve for an element: its shadow root, frame or the page. */
+function idRoot(element: Element, ctx: Context): Document | ShadowRoot {
+  const root = element.getRootNode() as Document | ShadowRoot;
+  return typeof root.getElementById === 'function' ? root : ctx.doc;
 }
 
 export function collapse(text: string): string {
@@ -323,7 +368,15 @@ export function textOf(
   const label = element.getAttribute('aria-label');
   if (label && !root) return label;
   let text = '';
-  for (const child of element.childNodes) {
+  // Read what is rendered: an open shadow root replaces the light children,
+  // which reappear through its slots.
+  const children =
+    element.shadowRoot?.childNodes ??
+    (element.localName === 'slot' &&
+    (element as HTMLSlotElement).assignedNodes?.({ flatten: true }).length
+      ? (element as HTMLSlotElement).assignedNodes({ flatten: true })
+      : element.childNodes);
+  for (const child of children) {
     text += ` ${textOf(child, skip, false, ownTextOnly)}`;
     if (text.length > NAME_MAX * 3) break;
   }
@@ -338,8 +391,9 @@ function referencedText(
   const value = element.getAttribute(attribute);
   if (!value) return '';
   let text = '';
+  const root = idRoot(element, ctx);
   for (const id of value.split(/\s+/)) {
-    const target = id ? ctx.doc.getElementById(id) : null;
+    const target = id ? root.getElementById(id) : null;
     if (target) text += ` ${textOf(target)}`;
   }
   return collapse(text);
@@ -356,6 +410,11 @@ function isFormField(element: Element): boolean {
 function labelFor(element: Element, ctx: Context): Element | null {
   const id = element.id;
   if (!id) return null;
+  const root = idRoot(element, ctx);
+  if (root !== ctx.doc)
+    return root.querySelector(
+      `label[for="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&')}"]`,
+    );
   if (!ctx.labelsFor) {
     ctx.labelsFor = new Map();
     for (const label of ctx.doc.querySelectorAll('label[for]')) {
@@ -389,6 +448,7 @@ export function nameOf(
   element: Element,
   ctx: Context,
   ownTextOnly = false,
+  role = roleOf(element) ?? '',
 ): string {
   const labelledBy = referencedText(element, 'aria-labelledby', ctx);
   if (labelledBy) return clip(ctx, labelledBy);
@@ -396,7 +456,6 @@ export function nameOf(
   if (ariaLabel?.trim()) return clip(ctx, ariaLabel);
   // Browsers name a labelable element, including a select trigger button,
   // from its <label> before its own text. Custom switches use label[for] too.
-  const role = roleOf(element) ?? '';
   if (
     LABELABLE_TAGS.has(element.localName) ||
     role === 'switch' ||
@@ -445,6 +504,31 @@ function nearbyText(element: Element, ctx: Context): string {
     ancestor = ancestor.parentElement;
   }
   return '';
+}
+
+/**
+ * The name the outline shows for a control: its accessible name, and with
+ * `infer` a symbol's meaning (× is "close") or a guess when it has none.
+ * `find` and `describeElement` use it so they agree with the outline.
+ */
+export function shownName(
+  element: Element,
+  ctx: Context,
+  ownTextOnly = false,
+  role = roleOf(element) ?? '',
+): string {
+  const name = nameOf(element, ctx, ownTextOnly, role);
+  if (!ctx.infer) return name;
+  if (name) return symbolName(name) ?? name;
+  return clip(ctx, guessName(element)?.name ?? '');
+}
+
+function hasAnyName(element: Element, ctx: Context, nested: boolean): boolean {
+  return Boolean(
+    nameOf(element, ctx, nested, 'clickable') ||
+      guessName(element) ||
+      nearbyText(element, ctx),
+  );
 }
 
 function isDisabled(element: Element): boolean {
@@ -681,17 +765,29 @@ function controlLine(
 ): string {
   const { ctx } = walk;
   const kind = role === 'file' ? 'file upload' : role;
-  const name = nameOf(element, ctx, ownTextOnly);
+  const name = nameOf(element, ctx, ownTextOnly, role);
   const value = controlValue(element, role, ctx);
   const target = role === 'link' ? linkTarget(element, walk.location) : null;
   const states = controlStates(element, role);
   const invalid = element.getAttribute('aria-invalid') === 'true';
   const description = describedBy(element, ctx);
-  let line = name ? `${kind} ${quote(name)}` : kind;
+  const symbol = ctx.infer && name ? symbolName(name) : null;
+  let line = name
+    ? symbol
+      ? `${kind} ${quote(symbol)} (guessed from ${name})`
+      : `${kind} ${quote(name)}`
+    : kind;
   if (!name) {
-    const nearby = nearbyText(element, ctx);
+    const field = FIELD_ROLES.has(role);
+    const before = ctx.infer && field ? textBefore(element) : '';
+    const nearby = before ? clip(ctx, before) : nearbyText(element, ctx);
     const attr = element.getAttribute(ctx.hintAttribute);
-    if (nearby) line += ` near ${quote(nearby)}`;
+    // A field's row text names it best; an icon button's icon names it best,
+    // and its row text beats a guess from an id or class.
+    const guess = ctx.infer && !(nearby && field) ? guessName(element) : null;
+    if (guess && (guess.strong || !nearby))
+      line += ` ${quote(clip(ctx, guess.name))} (guessed from ${guess.from})`;
+    else if (nearby) line += ` near ${quote(nearby)}`;
     else if (attr) line += ` (unlabelled, ${ctx.hintAttribute} ${attr})`;
   }
   if (value && value !== name) line += ` = ${quote(value)}`;
@@ -724,8 +820,27 @@ function tableLine(element: Element, walk: Walk): string {
   return line;
 }
 
-function walkChildren(element: Element, depth: number, walk: Walk) {
-  const children = element.children;
+/** The rendered children: a shadow root's, or the elements a slot shows. */
+function childrenOf(element: Element, walk: Walk): ArrayLike<Element> {
+  if (walk.ctx.infer) {
+    if (element.shadowRoot) return element.shadowRoot.children;
+    if (element.localName === 'slot') {
+      const assigned = (element as HTMLSlotElement).assignedElements({
+        flatten: true,
+      });
+      if (assigned.length) return assigned;
+    }
+  }
+  return element.children;
+}
+
+function walkChildren(
+  element: Element,
+  depth: number,
+  walk: Walk,
+  parentPointer = false,
+) {
+  const children = childrenOf(element, walk);
   const count = children.length;
   if (count === 0) return;
   // Only count signatures when a run could be long enough to shorten.
@@ -754,11 +869,43 @@ function walkChildren(element: Element, depth: number, walk: Walk) {
         }
       }
     }
-    walkElement(child, depth, walk);
+    walkElement(child, depth, walk, parentPointer);
   }
 }
 
-function walkElement(element: Element, depth: number, walk: Walk) {
+/**
+ * A same-origin frame is read like part of the page. Another site's frame
+ * can't be read, so only its title is listed, and only when it is big
+ * enough to be content rather than a tracking pixel.
+ */
+function walkFrame(frame: HTMLIFrameElement, depth: number, walk: Walk) {
+  const rect = frame.getBoundingClientRect();
+  if ((rect.width || rect.height) && (rect.width < 60 || rect.height < 40))
+    return;
+  const title = clip(
+    walk.ctx,
+    frame.title || frame.getAttribute('aria-label') || frame.name || '',
+  );
+  let body: HTMLElement | null = null;
+  try {
+    body = frame.contentDocument?.body ?? null;
+  } catch {
+    body = null;
+  }
+  if (body) {
+    add(walk, depth, `frame${title ? ` ${quote(title)}` : ''}`);
+    walkElement(body, depth + 1, walk);
+  } else if (title) {
+    add(walk, depth, `frame ${quote(title)} (another site, not readable)`);
+  }
+}
+
+function walkElement(
+  element: Element,
+  depth: number,
+  walk: Walk,
+  parentPointer = false,
+) {
   if (walk.truncated) return;
   walk.visited += 1;
   if (walk.visited > walk.maxElements) {
@@ -766,6 +913,16 @@ function walkElement(element: Element, depth: number, walk: Walk) {
     return;
   }
   const { ctx } = walk;
+  if (
+    ctx.infer &&
+    element.localName === 'iframe' &&
+    !(ctx.skip !== null && element.matches(ctx.skip)) &&
+    !isAriaHidden(element) &&
+    isRendered(element)
+  ) {
+    walkFrame(element as HTMLIFrameElement, depth, walk);
+    return;
+  }
   if (
     SKIPPED_TAGS.has(element.localName) ||
     (element.localName === 'dialog' && !element.hasAttribute('open')) ||
@@ -781,7 +938,30 @@ function walkElement(element: Element, depth: number, walk: Walk) {
     return;
   }
 
-  const role = roleOf(element);
+  let role = roleOf(element);
+  let pointer = false;
+  if (ctx.infer) {
+    const style =
+      element.ownerDocument.defaultView?.getComputedStyle(element) ?? null;
+    pointer = style?.cursor === 'pointer';
+    if (!role) {
+      if (isClickTarget(element, style, parentPointer, ctx.infer)) {
+        role = 'clickable';
+      } else {
+        const level = styledHeadingLevel(element, style, ctx.infer);
+        const text = level ? clip(ctx, textOf(element)) : '';
+        if (text) {
+          const offscreen = walk.viewport && isOffscreen(element);
+          add(
+            walk,
+            depth,
+            `h${level} ${quote(text)}${offscreen ? ' [offscreen]' : ''}`,
+          );
+          return;
+        }
+      }
+    }
+  }
   switch (role) {
     case 'heading': {
       const level =
@@ -851,14 +1031,14 @@ function walkElement(element: Element, depth: number, walk: Walk) {
         if (tabs.length) add(walk, depth, `tabs: ${tabs.join(' | ')}`);
       }
       walk.tablists.add(element);
-      walkChildren(element, depth, walk);
+      walkChildren(element, depth, walk, pointer);
       return;
     }
     case 'table':
     case 'grid':
     case 'treegrid':
       add(walk, depth, tableLine(element, walk));
-      walkChildren(element, depth + 1, walk);
+      walkChildren(element, depth + 1, walk, pointer);
       return;
     case 'log': {
       // Conversation logs hold what people said; only their presence matters.
@@ -887,7 +1067,7 @@ function walkElement(element: Element, depth: number, walk: Walk) {
         const text = clip(ctx, textOf(element));
         if (text) add(walk, depth, `${role} ${quote(text)}`);
       }
-      walkChildren(element, depth, walk);
+      walkChildren(element, depth, walk, pointer);
       return;
     }
   }
@@ -905,9 +1085,21 @@ function walkElement(element: Element, depth: number, walk: Walk) {
       !isFormField(element) &&
       element.getAttribute('contenteditable') !== 'true' &&
       Boolean(element.querySelector(INTERACTIVE_SELECTOR));
+    // A clickable div with no name, guess or row text is only noise to a
+    // model; anything named inside it is still listed.
+    if (role === 'clickable' && !hasAnyName(element, walk.ctx, nested)) {
+      walkChildren(element, depth, walk, pointer);
+      return;
+    }
     add(walk, depth, controlLine(element, role, walk, nested));
-    if (nested || (role === 'listbox' && element.localName !== 'select'))
-      walkChildren(element, depth + 1, walk);
+    // A clickable div can hold its own clickable parts (a card's heart
+    // icon), which only show up by walking it.
+    if (
+      nested ||
+      role === 'clickable' ||
+      (role === 'listbox' && element.localName !== 'select')
+    )
+      walkChildren(element, depth + 1, walk, pointer);
     return;
   }
 
@@ -924,7 +1116,7 @@ function walkElement(element: Element, depth: number, walk: Walk) {
       if (description)
         add(walk, depth + 1, `text ${quote(clip(ctx, description, TEXT_MAX))}`);
     }
-    walkChildren(element, depth + 1, walk);
+    walkChildren(element, depth + 1, walk, pointer);
     // An empty landmark (like a toast region with no toasts) is noise.
     if (walk.lines.length === start + 1 && !walk.truncated) {
       const [removed] = walk.lines.splice(start, 1);
@@ -943,7 +1135,7 @@ function walkElement(element: Element, depth: number, walk: Walk) {
     }
   }
 
-  walkChildren(element, depth, walk);
+  walkChildren(element, depth, walk, pointer);
 }
 
 function locationOf(
@@ -1033,7 +1225,16 @@ export function outline(
     }
   }
   const headerLines = walk.lines.length;
-  walkElement(body, 0, walk);
+  const overlay = walk.ctx.infer ? findOverlay(doc, walk.ctx.skip) : null;
+  if (overlay) {
+    // A div modal: show it alone, like a real one, so the page behind it
+    // isn't mistaken for something the user can use now.
+    const name = clip(walk.ctx, overlayName(overlay));
+    add(walk, 0, `dialog${name ? ` ${quote(name)}` : ''} (open)`);
+    walkChildren(overlay, 1, walk);
+  } else {
+    walkElement(body, 0, walk);
+  }
   if (walk.lines.length === headerLines) return null;
   if (walk.truncated) {
     const marker = '… (outline truncated)'.slice(0, Math.max(0, walk.maxChars));
