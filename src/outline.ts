@@ -8,7 +8,7 @@ import {
   symbolName,
   textBefore,
   type InferState,
-} from './infer';
+} from './infer.js';
 
 /**
  * A compact text outline of what a page shows, for an LLM agent. It walks the
@@ -90,7 +90,9 @@ export const DEFAULT_MAX_CHARS = 6_000;
 const DEFAULT_MAX_ELEMENTS = 20_000;
 const NAME_MAX = 100;
 const TEXT_MAX = 240;
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Only try at the start of a local-part run; retrying every suffix is quadratic
+// on long non-email text. Redact the whole address before applying the budget.
+const EMAIL_RE = /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 const SKIPPED_TAGS = new Set([
   'script',

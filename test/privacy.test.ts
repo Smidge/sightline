@@ -7,6 +7,7 @@ import {
   trackInteractions,
   type Interaction,
 } from '../src';
+import { clip, createContext } from '../src/outline';
 afterEach(() => {
   document.body.innerHTML = '';
   document.title = '';
@@ -66,6 +67,22 @@ it('keeps matching public emails consistently even with a global regex', () => {
     outline(document, { header: false, keepEmail: /^support@example\.test$/gi })
       ?.text,
   ).toBe('button "support@example.test support@example.test [email]"');
+});
+
+it('redacts complete addresses with punctuation and long local parts before clipping', () => {
+  const ctx = createContext(document);
+  expect(
+    clip(ctx, '(ada.name+tag%route_1-test@example.test), bob@example.test!'),
+  ).toBe('([email]), [email]!');
+  expect(clip(ctx, `${'%'.repeat(100_000)}@example.test`)).toBe('[email]');
+});
+
+it('handles long non-email runs without repeatedly scanning their suffixes', () => {
+  const ctx = createContext(document);
+  const input = '%'.repeat(100_000);
+  const start = performance.now();
+  expect(clip(ctx, input)).toBe(`${'%'.repeat(99)}…`);
+  expect(performance.now() - start).toBeLessThan(1000);
 });
 
 it('applies caller redaction to names and excerpts', () => {
