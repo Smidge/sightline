@@ -37,10 +37,18 @@ Playwright's AI snapshot and its in-page forks (`ivya`, `aria-snapshot`) produce
 - **It is written for models to act on.** With refs on, every control gets its own line, so a ref always sits next to its name. In live testing, a model reading several `Name [ref=eN]` pairs on one line picked the wrong one.
 - **It follows a live session.** `watch` reports navigation, dialogs and alerts once the page has settled. `track` reports what the user clicked or toggled, by name. Refs stay stable between captures, so an agent can say "highlight e4" after the page has changed around it.
 
+## Install
+
+```sh
+npm install @smidge/sightline
+```
+
+Sightline is an ES module with TypeScript types and no runtime dependencies. It needs a DOM, so call it in the browser.
+
 ## Usage
 
 ```ts
-import { createSightline } from '@anam-ai/sightline';
+import { createSightline } from '@smidge/sightline';
 
 const sightline = createSightline({
   skip: '[data-agent-panel]', // never describe the agent's own UI
@@ -142,3 +150,7 @@ pnpm test       # Vitest + happy-dom
 pnpm bench      # Chromium benchmark via Playwright (needs a local Chromium)
 pnpm build      # emits dist/
 ```
+
+## License
+
+MIT

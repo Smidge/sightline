@@ -3,36 +3,36 @@
  * page, reads the accessibility tree the way a screen reader does, and never
  * reads what the user typed.
  */
-import { describeElement, findControl } from './find';
-import { highlight, type HighlightOptions } from './highlight';
+import { describeElement, findControl } from './find.js';
+import { highlight, type HighlightOptions } from './highlight.js';
 import {
   describeInteraction,
   trackInteractions,
   type Interaction,
   type TrackOptions,
-} from './interactions';
+} from './interactions.js';
 import {
   RefRegistry,
   outline,
   type Outline,
   type OutlineOptions,
-} from './outline';
-import { watchPage, type PageChange, type WatchOptions } from './watch';
+} from './outline.js';
+import { watchPage, type PageChange, type WatchOptions } from './watch.js';
 
-export { diffLines, type LineDiff } from './diff';
+export { diffLines, type LineDiff } from './diff.js';
 export {
   describeElement,
   findControl,
   type DescribedElement,
   type FindOptions,
-} from './find';
-export { highlight, type HighlightOptions } from './highlight';
+} from './find.js';
+export { highlight, type HighlightOptions } from './highlight.js';
 export {
   describeInteraction,
   trackInteractions,
   type Interaction,
   type TrackOptions,
-} from './interactions';
+} from './interactions.js';
 export {
   DEFAULT_MAX_CHARS,
   RefRegistry,
@@ -41,13 +41,13 @@ export {
   type OutlineLocation,
   type OutlineOptions,
   type OutlineStats,
-} from './outline';
+} from './outline.js';
 export {
   watchPage,
   type PageChange,
   type PageChangeKind,
   type WatchOptions,
-} from './watch';
+} from './watch.js';
 
 export type SightlineOptions = OutlineOptions & {
   /** The document to read. Default `document`. */

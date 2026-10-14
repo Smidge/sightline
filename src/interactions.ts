@@ -1,5 +1,5 @@
-import { describeElement } from './find';
-import { clip, createContext, controlStates, roleOf } from './outline';
+import { describeElement } from './find.js';
+import { clip, createContext, controlStates, roleOf } from './outline.js';
 
 export type Interaction = {
   type: 'click' | 'toggle' | 'select' | 'focus' | 'edit' | 'submit';

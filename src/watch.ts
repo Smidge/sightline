@@ -1,5 +1,5 @@
-import { diffLines, type LineDiff } from './diff';
-import type { Outline } from './outline';
+import { diffLines, type LineDiff } from './diff.js';
+import type { Outline } from './outline.js';
 
 export type PageChangeKind =
   | 'initial'

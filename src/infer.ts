@@ -5,7 +5,7 @@
  * outline treats those as a sighted user would. Everything here is a guess,
  * so the outline marks guessed names with where they came from.
  */
-import { INTERACTIVE_SELECTOR, collapse, textOf } from './outline';
+import { INTERACTIVE_SELECTOR, collapse, textOf } from './outline.js';
 
 export type InferState = {
   /** Body text size, the baseline for spotting headings by size. */

@@ -1,4 +1,4 @@
-import { createInferState, isClickTarget, type InferState } from './infer';
+import { createInferState, isClickTarget, type InferState } from './infer.js';
 import {
   INTERACTIVE_SELECTOR,
   collapse,
@@ -7,7 +7,7 @@ import {
   roleOf,
   shownName,
   type Context,
-} from './outline';
+} from './outline.js';
 
 const FINDABLE_SELECTOR = `${INTERACTIVE_SELECTOR}, [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="progressbar"], [contenteditable="true"]`;
 
