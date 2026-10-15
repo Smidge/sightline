@@ -4,6 +4,8 @@ What's on the screen, as text an LLM agent can use.
 
 Sightline runs inside the page. It reads the accessibility tree the way a screen reader does and turns it into a compact outline: roles, accessible names, states, the dialog that's open, alerts and form errors. An agent built into your app can then answer "why can't I click Generate?" from what's actually rendered instead of from documentation that may be out of date.
 
+**[Try it on any page](https://smidge.github.io/sightline/)** and read the **[docs](https://smidge.github.io/sightline/docs/)**. The site's demo reads a public page in your browser, and its bookmarklet runs Sightline on whatever page you have open.
+
 ```
 Page: /api-keys
 Title: "Anam Lab"
@@ -149,7 +151,10 @@ pnpm install
 pnpm test       # Vitest + happy-dom
 pnpm bench      # Chromium benchmark via Playwright (needs a local Chromium)
 pnpm build      # emits dist/
+pnpm site       # builds the GitHub Pages site (site/) into _site/ and serves it on :4173
 ```
+
+The site deploys to GitHub Pages from `main` through `.github/workflows/pages.yml`.
 
 ## License
 

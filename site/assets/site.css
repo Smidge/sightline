@@ -1,0 +1,410 @@
+/* Shared by the home page and the docs. Tokens come from the first demo. */
+:root {
+  --ink: #16130f;
+  --ink-2: #4a443c;
+  --ink-3: #6f675c;
+  --paper: #faf8f5;
+  --paper-2: #f3efe9;
+  --surface: #ffffff;
+  --line: #e7e2da;
+  --line-strong: #d6cfc4;
+  --accent: #ff6200;
+  --accent-hover: #f05a00;
+  --accent-ink: #b84600;
+  --accent-wash: #fff1e6;
+  --added: #fff0e2;
+  --radius: 14px;
+  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --page: 1280px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --shadow: 0 1px 2px rgba(22, 19, 15, 0.05), 0 4px 12px -6px rgba(22, 19, 15, 0.12);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(255, 98, 0, 0.12);
+  scroll-padding-top: 24px;
+}
+
+a,
+button,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scrollbar-color: var(--line-strong) var(--paper);
+}
+
+::selection {
+  background: #ffd3b3;
+  color: var(--ink);
+}
+
+a {
+  color: var(--accent-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+code,
+kbd {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+:not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 10;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+.skip-link:hover,
+.skip-link:focus {
+  color: #fff;
+}
+
+/* Masthead */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 18px var(--gutter);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--ink);
+}
+
+.mark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.mark rect {
+  fill: var(--accent);
+}
+
+.mark path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+}
+
+.mark circle {
+  fill: #fff;
+}
+
+.wordmark {
+  font-weight: 650;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.site-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.site-nav a {
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-weight: 500;
+  font-size: 15px;
+  text-decoration: none;
+  transition: background-color 160ms ease-out, color 160ms ease-out;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current='page'] {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+/* Buttons and small controls */
+
+.button,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  border-radius: 11px;
+  background: var(--ink);
+  color: #fff;
+  font: 600 15px var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 160ms ease-out, transform 120ms ease-out;
+}
+
+.button:hover,
+.secondary:hover {
+  background: #2b2620;
+  color: #fff;
+}
+
+.button:active,
+.secondary:active {
+  transform: translateY(1px);
+}
+
+.text-link {
+  font-weight: 500;
+}
+
+.copy {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 500 13px var(--sans);
+  cursor: pointer;
+  transition: border-color 160ms ease-out, color 160ms ease-out;
+}
+
+.copy:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Code */
+
+pre {
+  font-family: var(--mono);
+}
+
+.code {
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  border-radius: 12px;
+  background: #1c1813;
+  color: #efe9df;
+  font: 13px/1.65 var(--mono);
+  tab-size: 2;
+  scrollbar-width: thin;
+  scrollbar-color: #4a443c transparent;
+}
+
+.code ::selection {
+  background: #6b3a12;
+  color: #fff;
+}
+
+.c-comment {
+  color: #a39a8d;
+}
+
+.c-string {
+  color: #ffb27a;
+}
+
+.c-keyword {
+  color: #ff8c42;
+}
+
+.c-number {
+  color: #f3d19c;
+}
+
+/* One-line signatures read better light than as full code blocks. */
+.code.sig {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sig .c-keyword {
+  color: var(--accent-ink);
+}
+
+.sig .c-string,
+.sig .c-number {
+  color: #8a4b00;
+}
+
+/* Outline text, wherever it is shown */
+
+[data-outline],
+.outline {
+  font-family: var(--mono);
+}
+
+.t-role {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.t-name {
+  color: #2e2924;
+}
+
+.t-state,
+.t-note,
+.t-target,
+.t-dash,
+.t-key {
+  color: var(--ink-3);
+}
+
+.t-ref {
+  color: var(--accent-ink);
+}
+
+/* Footer */
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  width: min(calc(100% - 2 * var(--gutter)), calc(var(--page) - 2 * var(--gutter)));
+  margin: 0 auto;
+  padding: 28px 0 44px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 14px;
+}
+
+.foot p {
+  margin: 0;
+}
+
+.foot strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.foot nav {
+  display: flex;
+  gap: 18px;
+}
+
+.foot a {
+  color: var(--ink-2);
+}
+
+@media (max-width: 560px) {
+  .site-nav a {
+    padding: 6px 7px;
+    font-size: 14px;
+  }
+
+  .wordmark {
+    font-size: 17px;
+  }
+
+  .mark {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

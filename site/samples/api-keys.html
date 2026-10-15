@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API keys · Ledgerly</title>
+    <meta name="robots" content="noindex" />
+    <!--
+      A made-up billing app for the Sightline demo. Some of it is built well
+      (labelled nav, table, fields) and some is built the way many real apps
+      are: a div for a button, unlabelled icon buttons, a styled div for a
+      heading, a switch with no label.
+    -->
+    <style>
+      :root {
+        --ink: #101828;
+        --muted: #5b6474;
+        --line: #e4e7ec;
+        --soft: #f6f7f9;
+        --brand: #3d5afe;
+        --warn-bg: #fff6e5;
+        --warn: #8a4b00;
+        font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        color: var(--ink);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #fff; }
+      .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+      .sidebar { border-right: 1px solid var(--line); background: var(--soft); padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; }
+      .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; padding: 0 8px; }
+      .logo i { width: 22px; height: 22px; border-radius: 6px; background: var(--brand); display: inline-block; }
+      nav { display: grid; gap: 2px; }
+      nav a { color: var(--muted); text-decoration: none; padding: 7px 10px; border-radius: 7px; font-weight: 500; }
+      nav a[aria-current] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08); }
+      .plan { margin-top: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+      .plan p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+      .upgrade { cursor: pointer; text-align: center; padding: 7px; border-radius: 7px; background: var(--ink); color: #fff; font-weight: 600; font-size: 13px; }
+      .content { min-width: 0; }
+      .topbar { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 28px; border-bottom: 1px solid var(--line); }
+      .crumbs { color: var(--muted); margin-right: auto; }
+      .icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); cursor: pointer; }
+      .icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .account { border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; padding: 6px 8px; border-radius: 8px; }
+      main { padding: 24px 28px 48px; max-width: 980px; }
+      .news { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: #eef1ff; color: #1f2f99; margin-bottom: 22px; }
+      .news span:first-child { margin-right: auto; }
+      .dismiss { cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; }
+      h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .lede { color: var(--muted); margin: 0 0 18px; }
+      .toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+      .search { flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--muted); }
+      .search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+      .search input { border: 0; outline: 0; font: inherit; height: 36px; width: 100%; }
+      .primary { border: 0; border-radius: 8px; padding: 0 14px; background: var(--brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+      .alert { padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); margin-bottom: 14px; }
+      table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+      th { text-align: left; font-weight: 500; color: var(--muted); background: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+      th, td { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+      td code { font: 12.5px ui-monospace, Menlo, monospace; color: var(--muted); }
+      td.actions { display: flex; gap: 6px; justify-content: flex-end; }
+      .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .section-title { font-size: 19px; font-weight: 700; margin: 34px 0 12px; }
+      .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .switch { width: 38px; height: 22px; border-radius: 11px; background: #d0d5dd; position: relative; cursor: pointer; }
+      .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+      .switch[aria-checked='true'] { background: var(--brand); }
+      .switch[aria-checked='true']::after { left: 19px; }
+      .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+      .fields label { display: grid; gap: 6px; font-weight: 500; }
+      .fields input { height: 36px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font: inherit; }
+      @media (max-width: 720px) {
+        .app { grid-template-columns: 1fr; }
+        .sidebar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+        nav { display: flex; overflow-x: auto; width: 100%; order: 3; }
+        nav a { white-space: nowrap; }
+        .plan { margin: 0 0 0 auto; padding: 0; border: 0; background: none; }
+        .plan p { display: none; }
+        .upgrade { padding: 6px 10px; }
+        .topbar, main { padding-left: 16px; padding-right: 16px; }
+        .crumbs { display: none; }
+        .topbar { justify-content: flex-end; }
+        th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { display: none; }
+        .fields { grid-template-columns: 1fr; }
+      }
+      .save { height: 36px; border: 0; border-radius: 8px; padding: 0 16px; background: #d0d5dd; color: #fff; font: inherit; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></symbol>
+      <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></symbol>
+      <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /></symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></symbol>
+    </svg>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="logo"><i></i>Ledgerly</div>
+        <nav aria-label="Main navigation">
+          <a href="/invoices">Invoices</a>
+          <a href="/customers">Customers</a>
+          <a href="/payments">Payments</a>
+          <a href="/settings/api-keys" aria-current="page">API keys</a>
+          <a href="/settings/webhooks">Webhooks</a>
+        </nav>
+        <div class="plan">
+          <p>Free plan: 9 of 10 keys used</p>
+          <div class="upgrade" onclick="upgrade()">Upgrade plan</div>
+        </div>
+      </aside>
+      <div class="content">
+        <header class="topbar">
+          <div class="crumbs">Settings / API keys</div>
+          <button class="icon"><svg><use href="#icon-bell" /></svg></button>
+          <button class="account" aria-haspopup="menu">maya.okafor@ledgerly.io</button>
+        </header>
+        <main>
+          <div class="news">
+            <span>New: limit a key to the IP addresses you choose.</span>
+            <span class="dismiss" onclick="dismiss()">×</span>
+          </div>
+          <h1>API keys</h1>
+          <p class="lede">Keys let your servers call the Ledgerly API. Anyone with a key can act as your account.</p>
+          <div class="toolbar">
+            <label class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-search" /></svg>
+              <input type="search" placeholder="Search keys" />
+            </label>
+            <button class="primary" disabled aria-describedby="limit">New key</button>
+          </div>
+          <div role="alert" class="alert" id="limit">You can have 10 keys on the Free plan. Delete one or upgrade to add more.</div>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th><span class="sr">Actions</span></th></tr>
+            </thead>
+            <tbody>
+              <tr><td>production</td><td><code>lk_live_…3cd2</code></td><td>2 Mar 2026</td><td>4 minutes ago</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>staging</td><td><code>lk_test_…91fa</code></td><td>2 Mar 2026</td><td>1 hour ago</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>ci-runner</td><td><code>lk_test_…07be</code></td><td>18 Feb 2026</td><td>Yesterday</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>zapier</td><td><code>lk_live_…a5d0</code></td><td>11 Feb 2026</td><td>3 days ago</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>reporting</td><td><code>lk_live_…6e13</code></td><td>30 Jan 2026</td><td>Last week</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>mobile-app</td><td><code>lk_live_…c482</code></td><td>12 Jan 2026</td><td>Last week</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>backfill</td><td><code>lk_test_…2f9d</code></td><td>3 Jan 2026</td><td>Never</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>partner-acme</td><td><code>lk_live_…88b1</code></td><td>9 Dec 2025</td><td>2 weeks ago</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+              <tr><td>old-dashboard</td><td><code>lk_live_…d7c6</code></td><td>2 Nov 2025</td><td>3 months ago</td><td class="actions"><button class="icon"><svg><use href="#icon-copy" /></svg></button><div class="icon" onclick="menu(this)"><svg><use href="#icon-more" /></svg></div></td></tr>
+            </tbody>
+          </table>
+          <div class="section-title">Defaults for new keys</div>
+          <div class="row"><span>Read invoices and customers</span><input type="checkbox" checked /></div>
+          <div class="row"><span>Create payments</span><div class="switch" role="switch" aria-checked="false" tabindex="0"></div></div>
+          <div class="fields">
+            <label>Key name prefix <input value="backend" /></label>
+            <label>Allowed IP addresses <input placeholder="Any address" /></label>
+          </div>
+          <button class="save" disabled>Save defaults</button>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
