@@ -185,3 +185,15 @@ it('uses nearby labels and configured hints for otherwise unnamed controls', () 
     'button (unlabelled, data-action save)',
   ]);
 });
+
+it('lists a details summary as a disclosure button with its open state', () => {
+  document.body.innerHTML = `<main><h1>Trail shoe</h1><details><summary>Size guide</summary><p>Go up half a size.</p></details><details open><summary>Shipping &amp; returns</summary><p>Free over £50.</p></details><details><summary aria-expanded="true">Materials</summary></details><details><summary>First</summary><summary>Second</summary></details></main>`;
+  expect(outline(document, { header: false })?.lines).toEqual([
+    'main',
+    '  h1 "Trail shoe"',
+    '  button "Size guide" [collapsed]',
+    '  button "Shipping & returns" [expanded]',
+    '  button "Materials" [expanded]',
+    '  button "First" [collapsed]',
+  ]);
+});
