@@ -187,7 +187,16 @@ const LABELABLE_TAGS = new Set([
 ]);
 
 export const INTERACTIVE_SELECTOR =
-  'a[href], button, input:not([type="hidden"]), select, textarea, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="combobox"], [role="slider"], [role="tab"], [role="menuitem"]';
+  'a[href], button, input:not([type="hidden"]), select, textarea, details > summary, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="combobox"], [role="slider"], [role="tab"], [role="menuitem"]';
+
+/** The summary that toggles its details: the first summary child. */
+export function isDisclosureSummary(element: Element): boolean {
+  const parent = element.parentElement;
+  return (
+    parent?.localName === 'details' &&
+    parent.querySelector(':scope > summary') === element
+  );
+}
 
 const LABELABLE_SELECTOR =
   'input:not([type="hidden"]), select, textarea, [role="switch"], [role="checkbox"], [role="radio"], [role="slider"], [role="combobox"]';
@@ -330,6 +339,10 @@ export function roleOf(element: Element): string | null {
       return 'label';
     case 'legend':
       return 'legend';
+    case 'summary':
+      // Browsers expose a details summary as a disclosure button. Shopify
+      // themes build size guides, shipping notes and menus from them.
+      return isDisclosureSummary(element) ? 'button' : null;
   }
   if (element.getAttribute('contenteditable') === 'true') return 'textbox';
   return null;
@@ -564,7 +577,11 @@ export function controlStates(element: Element, role: string): string[] {
   if (current && current !== 'false') states.push('current');
   const pressed = element.getAttribute('aria-pressed');
   if (pressed === 'true') states.push('pressed');
-  const expanded = element.getAttribute('aria-expanded');
+  const expanded =
+    element.getAttribute('aria-expanded') ??
+    (element.localName === 'summary' && isDisclosureSummary(element)
+      ? String((element.parentElement as HTMLDetailsElement).open)
+      : null);
   if (expanded === 'true') states.push('expanded');
   else if (expanded === 'false') states.push('collapsed');
   const popup = element.getAttribute('aria-haspopup');
