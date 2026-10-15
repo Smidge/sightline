@@ -8,12 +8,20 @@
       name="description"
       content="Sightline runs inside your page, reads it the way a screen reader does and gives your AI agent a short outline it can act on. It never reads what users type. Try it on any page."
     />
-    <meta property="og:title" content="Sightline: what's on screen, as text an AI agent can use" />
-    <meta
-      property="og:description"
-      content="An in-page, privacy-safe outline of the screen for LLM agents. Type any address and see what an agent would read."
-    />
+    <link rel="canonical" href="https://smidge.github.io/sightline/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Sightline" />
+    <meta property="og:url" content="https://smidge.github.io/sightline/" />
+    <meta property="og:title" content="Sightline: what's on screen, as text an AI agent can use" />
+    <meta property="og:description" content="An in-page, privacy-safe outline of the screen for LLM agents. Type any address and see what an agent would read." />
+    <meta property="og:image" content="https://smidge.github.io/sightline/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sightline: a page outline as an AI agent reads it, with roles, names, states and refs." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Sightline: what's on screen, as text an AI agent can use" />
+    <meta name="twitter:description" content="An in-page, privacy-safe outline of the screen for LLM agents. Type any address and see what an agent would read." />
+    <meta name="twitter:image" content="https://smidge.github.io/sightline/assets/og.png" />
     <meta name="theme-color" content="#faf8f5" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -486,8 +494,8 @@ const stopTracking = sightline.track((interaction) => {
           </a>
           <p>
             Drag it to your bookmarks bar, or press it here to try it on this
-            page. Press it again to close the panel. A few sites block
-            bookmarklets with a strict content security policy.
+            page. Press it again to close the panel. In Chrome it also runs on
+            sites with strict security policies, such as GitHub and YouTube.
           </p>
         </div>
       </section>
