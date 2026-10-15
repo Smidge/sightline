@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Docs · Sightline</title>
+    <meta
+      name="description"
+      content="How to install Sightline, read its outlines, send them to a model, and use capture, highlight, watch and track in your in-app assistant."
+    />
+    <meta name="theme-color" content="#faf8f5" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <link rel="stylesheet" href="../assets/docs.css" />
+    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
+    <script src="../assets/docs.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="masthead">
+      <a class="brand" href="../" aria-label="Sightline home">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" />
+          <path d="M6 16c3-5 6.5-7.5 10-7.5S23 11 26 16c-3 5-6.5 7.5-10 7.5S9 21 6 16Z" />
+          <circle cx="16" cy="16" r="3" />
+        </svg>
+        <span class="wordmark">Sightline</span>
+      </a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="../#demo">Demo</a>
+        <a href="./" aria-current="page">Docs</a>
+        <a href="https://github.com/Smidge/sightline">GitHub</a>
+        <a href="https://www.npmjs.com/package/@smidge/sightline">npm</a>
+      </nav>
+    </header>
+
+    <div class="docs">
+      <nav class="toc" aria-label="On this page">
+        <p class="toc-title">On this page</p>
+        <ol>
+          <li><a href="#overview">What it does</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="#quick-start">Quick start</a></li>
+          <li><a href="#outline-format">Reading an outline</a></li>
+          <li><a href="#prompting">Sending it to a model</a></li>
+          <li><a href="#api">createSightline</a></li>
+          <li><a href="#options">Options</a></li>
+          <li><a href="#watching">Watching a live page</a></li>
+          <li><a href="#tracking">Tracking the user</a></li>
+          <li><a href="#infer">Pages without semantic HTML</a></li>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#lower-level">Lower-level functions</a></li>
+          <li><a href="#performance">Performance</a></li>
+          <li><a href="#names">Accessible names</a></li>
+          <li><a href="#development">Development</a></li>
+        </ol>
+      </nav>
+
+      <main id="main" class="doc">
+        <header class="doc-head">
+          <h1>Sightline docs</h1>
+          <p class="doc-lede">
+            Sightline turns what's on screen into a compact text outline for an
+            LLM agent: roles, accessible names, states, the dialog that's open,
+            alerts and form errors. It runs inside the page and never reads what
+            the user typed.
+          </p>
+        </header>
+
+        <section id="overview">
+          <h2>What it does</h2>
+          <p>
+            An assistant built into your app can answer "why can't I click
+            Generate?" from what's actually rendered instead of from
+            documentation that may be out of date. Sightline gives it that view.
+            It reads the accessibility tree the way a screen reader does and
+            writes one short line per heading, landmark and control:
+          </p>
+          <pre data-outline>
+Page: /api-keys
+Title: "Anam Lab"
+Viewport: 1440px wide
+Scroll: top, more below
+navigation "Main navigation"
+  link "Personas" → / [ref=e1]
+  link "API Keys" → /api-keys [current] [ref=e2]
+  link "Sessions" → /sessions [ref=e3]
+main
+  h1 "API Keys"
+  button "New Key" [ref=e4]
+  searchbox "Search API keys..." [empty] [ref=e5]
+  table: columns Key ID | Label | Created | Actions; 9 rows
+    button "1675c7a…3cd2" [ref=e6]
+    button "Open actions for production" [collapsed, opens menu] [ref=e7]
+    … 6 more similar items</pre>
+          <p>
+            It's built for an assistant inside your own product, looking at a
+            real user's screen, so it follows a few rules a testing snapshot
+            doesn't need:
+          </p>
+          <ul>
+            <li>It never reads field values, passwords or contenteditable text. Email addresses become <code>[email]</code>.</li>
+            <li>With a modal open, only the modal is listed.</li>
+            <li>Repeats and tables are summarised, and the whole outline fits a character budget.</li>
+            <li>It runs in the page with no CDP, extension, server or dependencies, in a few milliseconds.</li>
+            <li>A <code>skip</code> selector keeps your agent's own panel out.</li>
+            <li>Refs stay stable between captures, so the agent can point at a control after the page changes.</li>
+          </ul>
+        </section>
+
+        <section id="install">
+          <h2>Install</h2>
+          <div class="install">
+            <code><span class="prompt" aria-hidden="true">$</span> npm install @smidge/sightline</code>
+            <button type="button" class="copy" data-copy="npm install @smidge/sightline" aria-label="Copy install command">Copy</button>
+          </div>
+          <p>
+            Sightline is an ES module with TypeScript types and no runtime
+            dependencies. It needs a DOM, so call it in the browser, in the same
+            page as the UI it describes.
+          </p>
+        </section>
+
+        <section id="quick-start">
+          <h2>Quick start</h2>
+          <p>
+            Create one Sightline per page and capture an outline whenever the
+            user asks your assistant something. Keep the instance around: it
+            remembers which element has which ref.
+          </p>
+          <pre class="code"><code class="ts">import { createSightline } from '@smidge/sightline';
+
+const sightline = createSightline({
+  skip: '[data-agent-panel]', // never describe the agent's own UI
+  viewport: true, // mark [offscreen] controls, add a Scroll: line
+});
+
+// Send with each message to your LLM.
+const outline = sightline.capture();
+await chat.send({ text: question, pageOutline: outline?.text });
+
+// Let the agent point at things.
+sightline.highlight('e5'); // by ref from the outline
+sightline.highlight('New Key'); // or by visible name</code></pre>
+          <p>
+            <code>capture()</code> returns <code>null</code> when the page has
+            nothing to list, so a failed capture never blocks the message.
+          </p>
+        </section>
+
+        <section id="outline-format">
+          <h2>Reading an outline</h2>
+          <p>
+            An outline is plain text, one item per line. Indentation shows
+            nesting: controls sit under the landmark, dialog or table that holds
+            them. Each line starts with a role and, when there is one, the
+            accessible name in quotes. Everything after the name is optional.
+          </p>
+          <pre data-outline>
+textbox "Label" [required, empty, invalid] [ref=e1] — "Enter a label."</pre>
+          <p>
+            That line is a text field named "Label". It's required, has nothing
+            in it and is marked invalid, its ref is <code>e1</code>, and the
+            text after the dash is the error message it points to with
+            <code>aria-describedby</code> or <code>aria-errormessage</code>.
+          </p>
+
+          <h3 id="format-header">Header lines</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Line</th><th scope="col">Meaning</th></tr></thead>
+              <tbody>
+                <tr><td><code>Page: /settings/api-keys</code></td><td>The path, plus any query parameters in <code>keepParams</code> (<code>tab</code> by default). Change it with <code>pageAddress</code>.</td></tr>
+                <tr><td><code>Title: "API keys · Acme"</code></td><td>The document title.</td></tr>
+                <tr><td><code>Viewport: 1440px wide</code></td><td>The window width, so the agent knows whether it's looking at a phone layout.</td></tr>
+                <tr><td><code>Scroll: top, more below</code></td><td>Where the page is scrolled. Only with <code>viewport: true</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Turn all of these off with <code>header: false</code>.</p>
+
+          <h3 id="format-controls">Controls</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Part</th><th scope="col">Example</th><th scope="col">Meaning</th></tr></thead>
+              <tbody>
+                <tr><td>Role</td><td><code>button</code>, <code>link</code>, <code>textbox</code>, <code>switch</code>, <code>combobox</code>, <code>tab</code></td><td>From the element or its <code>role</code> attribute. A file input reads as <code>file upload</code>.</td></tr>
+                <tr><td>Name</td><td><code>button "New key"</code></td><td>The accessible name: <code>aria-labelledby</code>, <code>aria-label</code>, a <code>&lt;label&gt;</code>, the element's own text, then <code>title</code> or <code>placeholder</code>.</td></tr>
+                <tr><td>Nearby text</td><td><code>switch near "Email alerts"</code></td><td>No accessible name, so Sightline quotes the text in the same row, as a sighted user would read it.</td></tr>
+                <tr><td>Hint</td><td><code>button (unlabelled, data-testid save)</code></td><td>No name and no nearby text. The <code>hintAttribute</code> is quoted instead.</td></tr>
+                <tr><td>Value</td><td><code>combobox "Expires" = "In 30 days"</code></td><td>The chosen option of a select, or a slider's value. Never anything typed.</td></tr>
+                <tr><td>Destination</td><td><code>link "Docs" → /docs</code></td><td>Where a link goes: a path on the same site, host and path on another.</td></tr>
+                <tr><td>States</td><td><code>[current]</code> <code>[checked]</code> <code>[on]</code> <code>[collapsed, opens menu]</code></td><td>See the list below.</td></tr>
+                <tr><td>Ref</td><td><code>[ref=e12]</code></td><td>A handle for <code>find</code> and <code>highlight</code>. On by default in <code>createSightline</code>.</td></tr>
+                <tr><td>Description</td><td><code>— "Enter a label."</code></td><td>Text from <code>aria-describedby</code> or <code>aria-errormessage</code>.</td></tr>
+                <tr><td>Guess</td><td><code>(guessed from icon)</code></td><td>A name inferred by <code>infer</code>, and where it came from.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            States, in the order they appear: <code>checked</code>,
+            <code>unchecked</code>, <code>mixed</code>, <code>on</code> and
+            <code>off</code> for switches, <code>selected</code>,
+            <code>current</code>, <code>pressed</code>, <code>expanded</code>
+            or <code>collapsed</code>, <code>opens menu</code> (or
+            <code>opens dialog</code>, <code>opens listbox</code> and so on),
+            <code>disabled</code>, <code>required</code>, <code>empty</code>,
+            <code>invalid</code> and <code>offscreen</code>.
+          </p>
+
+          <h3 id="format-structure">Structure</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Line</th><th scope="col">Meaning</th></tr></thead>
+              <tbody>
+                <tr><td><code>h2 "Billing"</code></td><td>A heading and its level.</td></tr>
+                <tr><td><code>main</code>, <code>navigation "Main"</code>, <code>form "New key"</code>, <code>region "Usage"</code>, <code>complementary</code></td><td>Landmarks. Their contents are indented under them. Empty ones are dropped.</td></tr>
+                <tr><td><code>dialog "Delete key?" (open)</code></td><td>An open dialog. When it's modal, the page behind it isn't listed.</td></tr>
+                <tr><td><code>tabs</code></td><td>A tab list, one tab per line with refs on.</td></tr>
+                <tr><td><code>table: columns Name | Key | Created; 9 rows</code></td><td>A table as its column headers and row count. Controls inside rows are listed under it.</td></tr>
+                <tr><td><code>… 6 more similar items</code></td><td>A run of similar items, shortened to the first three (<code>repeatKeep</code>) once it reaches eight (<code>repeatMin</code>).</td></tr>
+                <tr><td><code>alert "Payment failed."</code>, <code>status "Saved"</code>, <code>toast "Key copied"</code></td><td>Messages from alert and status roles, short live regions and Sonner toasts.</td></tr>
+                <tr><td><code>label "Plan"</code>, <code>legend "Billing address"</code></td><td>Labels and legends that don't belong to a single field.</td></tr>
+                <tr><td><code>log "Conversation"</code></td><td>A <code>role="log"</code> region. Only its name is listed: chat logs hold what people said.</td></tr>
+                <tr><td><code>… (outline truncated)</code></td><td>The outline reached <code>maxChars</code> or <code>maxElements</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Paragraph text isn't listed on its own. It reaches the outline when
+            it names something: a button's text, a field's label, a dialog's
+            description, an error message.
+          </p>
+        </section>
+
+        <section id="prompting">
+          <h2>Sending it to a model</h2>
+          <p>
+            Send a fresh outline with every user message, and tell the model
+            what it is. Refs give the model a way to name a control exactly, so
+            ask it to use them, then point at what it named:
+          </p>
+          <pre class="code"><code class="ts">const outline = sightline.capture();
+
+const system = [
+  'You are the assistant inside Acme.',
+  'Each message includes an outline of the screen the user is looking at.',
+  'Answer from the outline. To point at a control, include its ref, like [ref=e12].',
+].join('\n');
+
+const reply = await model.respond({
+  system,
+  message: `${question}\n\n&lt;screen&gt;\n${outline?.text ?? 'No outline available.'}\n&lt;/screen&gt;`,
+});
+
+for (const [, ref] of reply.matchAll(/\[ref=(e\d+)\]/g)) sightline.highlight(ref);</code></pre>
+          <p>A few things that help:</p>
+          <ul>
+            <li>
+              Keep the default budget. 6,000 characters is about 1,500 tokens,
+              and most app pages fit. Raise <code>maxChars</code> for long
+              documents rather than dropping it.
+            </li>
+            <li>
+              Turn on <code>viewport</code> if the agent gives directions. It
+              can then say "scroll down to Webhooks" for an
+              <code>[offscreen]</code> control.
+            </li>
+            <li>
+              For a live agent, send the <code>watch</code> diff instead of the
+              whole outline each time. <code>change.diff.added</code> holds
+              just the new lines.
+            </li>
+          </ul>
+        </section>
+
+        <section id="api">
+          <h2>createSightline</h2>
+          <pre class="code sig"><code class="ts">createSightline(options?: SightlineOptions): Sightline</code></pre>
+          <p>
+            Takes every <a href="#options">outline option</a>, plus
+            <code>document</code> to read a document other than the current
+            one (a same-origin iframe, for example). Refs are on by default.
+            The returned object keeps element refs stable across captures.
+          </p>
+
+          <h3 id="capture"><code>capture(overrides?)</code></h3>
+          <pre class="code sig"><code class="ts">capture(overrides?: Partial&lt;OutlineOptions&gt;): Outline | null</code></pre>
+          <p>
+            Outlines the page now. <code>overrides</code> change options for
+            this capture only, such as <code>{ infer: true }</code>. Returns
+            <code>null</code> when nothing useful was found.
+          </p>
+          <pre class="code"><code class="ts">type Outline = {
+  text: string; // the outline
+  lines: string[]; // the same, one entry per line
+  refs: Map&lt;string, Element&gt;; // e1 → element, for this capture
+  stats: {
+    chars: number;
+    lines: number;
+    visited: number; // elements walked
+    controls: number;
+    truncated: boolean;
+    ms: number;
+  };
+};</code></pre>
+
+          <h3 id="resolve"><code>resolve(ref)</code></h3>
+          <pre class="code sig"><code class="ts">resolve(ref: string): Element | null</code></pre>
+          <p>
+            The element behind a ref from an earlier capture, or
+            <code>null</code> once it has left the page. Accepts
+            <code>e12</code> or <code>ref=e12</code>.
+          </p>
+
+          <h3 id="find"><code>find(target, role?)</code></h3>
+          <pre class="code sig"><code class="ts">find(target: string, role?: string | null): Element | null</code></pre>
+          <p>
+            A visible control by ref or by the name the outline shows. An exact
+            name beats a partial one. Pass <code>role</code> to narrow it:
+            <code>find('Save', 'button')</code>.
+          </p>
+
+          <h3 id="highlight"><code>highlight(target, options?)</code></h3>
+          <pre class="code sig"><code class="ts">highlight(target: string | Element, options?: HighlightOptions &amp; { role?: string | null }): boolean</code></pre>
+          <p>
+            Scrolls a control into view and draws a pulsing ring over it, so
+            the user can see what the agent means. The ring sits above the
+            page, ignores the pointer and is hidden from assistive technology;
+            the element itself isn't changed. Returns <code>false</code> when
+            nothing matched.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>durationMs</code></td><td>2,400</td><td>How long the ring stays</td></tr>
+                <tr><td><code>pulseMs</code></td><td>800</td><td>Length of one pulse</td></tr>
+                <tr><td><code>color</code></td><td><code>#2f6bff</code></td><td>Ring colour</td></tr>
+                <tr><td><code>scroll</code></td><td><code>true</code></td><td>Scroll the element into view first</td></tr>
+                <tr><td><code>reducedMotion</code></td><td>the user's setting</td><td>Skip the pulse and the smooth scroll</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="watch"><code>watch(onChange, options?)</code></h3>
+          <pre class="code sig"><code class="ts">watch(onChange: (change: PageChange) =&gt; void, options?: WatchOptions): () =&gt; void</code></pre>
+          <p>
+            Reports the page each time it settles into a new state. Returns a
+            function that stops watching. See
+            <a href="#watching">Watching a live page</a>.
+          </p>
+
+          <h3 id="track"><code>track(onInteraction, options?)</code></h3>
+          <pre class="code sig"><code class="ts">track(onInteraction: (interaction: Interaction &amp; { ref: string }) =&gt; void, options?: TrackOptions): () =&gt; void</code></pre>
+          <p>
+            Reports clicks, toggles, chosen options, focus moving into a field
+            and fields being filled or cleared, each with the control's ref.
+            Returns a function that stops tracking. See
+            <a href="#tracking">Tracking the user</a>.
+          </p>
+        </section>
+
+        <section id="options">
+          <h2>Options</h2>
+          <p>
+            <code>createSightline</code> and <code>outline</code> take the same
+            options.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>skip</code></td><td>none</td><td>Selector for subtrees to leave out, such as your agent's panel</td></tr>
+                <tr><td><code>maxChars</code></td><td>6,000</td><td>Character budget. The outline ends with <code>… (outline truncated)</code></td></tr>
+                <tr><td><code>maxElements</code></td><td>20,000</td><td>Element budget for one walk</td></tr>
+                <tr><td><code>refs</code></td><td><code>true</code> in <code>createSightline</code>, else <code>false</code></td><td>Add <code>[ref=eN]</code> to controls, one control per line</td></tr>
+                <tr><td><code>viewport</code></td><td><code>false</code></td><td>Mark <code>[offscreen]</code> controls and add a <code>Scroll:</code> line</td></tr>
+                <tr><td><code>header</code></td><td><code>true</code></td><td>Add the <code>Page:</code>, <code>Title:</code> and <code>Viewport:</code> lines</td></tr>
+                <tr><td><code>keepParams</code></td><td><code>['tab']</code></td><td>Query parameters kept on the <code>Page:</code> line</td></tr>
+                <tr><td><code>pageAddress</code></td><td>path and kept params</td><td>Function that writes the <code>Page:</code> line</td></tr>
+                <tr><td><code>location</code></td><td><code>document.location</code></td><td>The address to report, for iframes and tests</td></tr>
+                <tr><td><code>keepEmail</code></td><td>none</td><td>Email addresses matching this pattern are kept</td></tr>
+                <tr><td><code>redact</code></td><td>none</td><td>Extra redaction for every name and text excerpt</td></tr>
+                <tr><td><code>hintAttribute</code></td><td><code>data-testid</code></td><td>Quoted for a control with no name and no nearby text</td></tr>
+                <tr><td><code>repeatMin</code> / <code>repeatKeep</code></td><td>8 / 3</td><td>When a run of similar items is shortened, and how many are kept</td></tr>
+                <tr><td><code>infer</code></td><td><code>false</code></td><td>Also read pages built without semantic HTML (<a href="#infer">see below</a>)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Without refs, navigation and tabs collapse onto one line each:</p>
+          <pre data-outline>
+navigation "Settings": Profile · API keys [current] · Billing
+main
+  h1 "API keys"
+  button "New key"</pre>
+        </section>
+
+        <section id="watching">
+          <h2>Watching a live page</h2>
+          <p>
+            A live agent, such as a voice or avatar assistant, needs to know
+            when the screen changes without polling. <code>watch</code> calls
+            back once with the initial page, then each time the page settles
+            into a new state.
+          </p>
+          <pre class="code"><code class="ts">const stop = sightline.watch((change) =&gt; {
+  if (change.kind === 'update') return; // only navigation, dialogs and alerts
+  agent.addContext(`[screen] ${change.kind} ${change.path}\n${change.outline.text}`);
+});</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Field</th><th scope="col">Meaning</th></tr></thead>
+              <tbody>
+                <tr><td><code>kind</code></td><td><code>initial</code>, <code>navigation</code>, <code>dialog-opened</code>, <code>dialog-closed</code>, <code>alert</code> or <code>update</code></td></tr>
+                <tr><td><code>path</code></td><td>The path and query when the change settled</td></tr>
+                <tr><td><code>outline</code> / <code>previous</code></td><td>The outline now, and the last one reported</td></tr>
+                <tr><td><code>diff</code></td><td><code>{ added, removed }</code>: lines that appeared and disappeared</td></tr>
+                <tr><td><code>dialogs</code></td><td>Names of the dialogs open now</td></tr>
+                <tr><td><code>alerts</code></td><td>Alert, toast and status texts that appeared with this change</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            It captures at most once every 150 ms while the page is busy. It
+            reports a change only after the page has held still for 250 ms, or
+            700 ms after the address changes so the new page can load. A poll
+            every 1.5 s catches changes that no mutation reports, and mutations
+            inside <code>skip</code> are ignored.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>settleMs</code></td><td>250</td><td>How long the page must hold still</td></tr>
+                <tr><td><code>navigationSettleMs</code></td><td>700</td><td>The same, after the address changed</td></tr>
+                <tr><td><code>throttleMs</code></td><td>150</td><td>Minimum gap between captures while busy</td></tr>
+                <tr><td><code>pollMs</code></td><td>1,500</td><td>Safety poll for changes no mutation reports</td></tr>
+                <tr><td><code>updates</code></td><td><code>true</code></td><td>Report plain updates, not only navigation, dialogs and alerts</td></tr>
+                <tr><td><code>initial</code></td><td><code>true</code></td><td>Report the page as it is when watching starts</td></tr>
+                <tr><td><code>path</code></td><td>path and query</td><td>Function that returns the current address</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tracking">
+          <h2>Tracking the user</h2>
+          <p>
+            <code>track</code> tells the agent what the user did, by the
+            control's role and name, in the same words as the outline. It never
+            reports what was typed: an edit is only <code>filled</code> or
+            <code>empty</code>.
+          </p>
+          <pre class="code"><code class="ts">import { describeInteraction } from '@smidge/sightline';
+
+const stop = sightline.track((interaction) =&gt; {
+  agent.addContext(`[user] ${describeInteraction(interaction)} (${interaction.ref})`);
+});</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Type</th><th scope="col"><code>describeInteraction</code> says</th></tr></thead>
+              <tbody>
+                <tr><td><code>click</code></td><td><code>clicked button "New key"</code></td></tr>
+                <tr><td><code>toggle</code></td><td><code>turned switch "Email alerts" on</code></td></tr>
+                <tr><td><code>select</code></td><td><code>chose "In 30 days" in combobox "Expires"</code></td></tr>
+                <tr><td><code>focus</code></td><td><code>moved into textbox "Label"</code></td></tr>
+                <tr><td><code>edit</code></td><td><code>filled in textbox "Label"</code> or <code>cleared textbox "Label"</code></td></tr>
+                <tr><td><code>submit</code></td><td><code>submitted button "Create key"</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each interaction also carries <code>role</code>, <code>name</code>,
+            <code>state</code> (for toggles and edits), <code>option</code>
+            (for selects), <code>hint</code> (the <code>hintAttribute</code>
+            value), <code>element</code> and <code>at</code>, a timestamp.
+            Repeats of the same interaction within 300 ms
+            (<code>dedupeMs</code>) are dropped. With <code>infer</code>, clicks
+            on the clickable elements it finds are reported too.
+          </p>
+        </section>
+
+        <section id="infer">
+          <h2>Pages without semantic HTML</h2>
+          <p>
+            Many sites build buttons from plain divs with a click handler, leave
+            icon buttons unnamed, and fake headings and modals with styling.
+            With <code>infer: true</code>, Sightline reads those as a sighted
+            user would. Everything it infers is marked as a guess.
+          </p>
+          <div class="pair">
+            <figure>
+              <figcaption>Semantic HTML only</figcaption>
+              <pre data-outline>
+textbox near "× Summer sale Email Add to bag" [empty] [ref=e1]</pre>
+            </figure>
+            <figure>
+              <figcaption>With <code>infer: true</code></figcaption>
+              <pre data-outline>
+clickable "shopping bag" (guessed from image file name) [ref=e1]
+clickable "close" (guessed from ×) [ref=e2]
+h2 "Summer sale"
+textbox near "Email" [empty] [ref=e3]
+clickable "Add to bag" [ref=e4]</pre>
+            </figure>
+          </div>
+          <ul>
+            <li>
+              An element that reacts to clicks without a button or link role is
+              listed as <code>clickable</code>. Sightline counts an
+              <code>onclick</code> attribute or property, React
+              (<code>__reactProps$…</code>) and Vue click props, jQuery
+              handlers, and the element where a pointer cursor starts. It
+              leaves out a wrapper around a real link or button, a container
+              holding form fields, anything covering half the screen, and a
+              clickable with nothing to call it.
+            </li>
+            <li>
+              A control with no name gets a guess, marked with its source, such
+              as <code>button "close" (guessed from icon)</code>. The guess
+              comes from a tooltip attribute, the icon inside
+              (<code>fa-trash</code>, <code>lucide-x</code>,
+              <code>&lt;use href="#icon-cart"&gt;</code>, Material UI's
+              <code>data-testid="DeleteIcon"</code>), an image file name, a test
+              id, <code>name</code>, <code>id</code> or the class. A guess from a
+              file name, id or class is kept only if it contains a word that
+              says what the control does. A field takes the short text just
+              before it, and a control showing only <code>×</code> or
+              <code>☰</code> reads as <code>close</code> or <code>menu</code>.
+            </li>
+            <li>
+              Short text set noticeably larger and bolder than the body text
+              becomes a heading. Prices are left out.
+            </li>
+            <li>
+              A fixed element over the centre of the viewport that covers a
+              fifth of it, holds something to click and isn't the whole app
+              counts as an open dialog. Only the dialog is shown, and
+              <code>watch</code> reports it opening and closing.
+            </li>
+            <li>
+              Open shadow roots, their slots and same-origin frames are read. A
+              frame from another site is listed by its title.
+            </li>
+          </ul>
+          <p>
+            <code>find</code>, <code>highlight</code>, <code>track</code> and
+            <code>describeElement</code> use the same names, so an agent can
+            ask to click "close" when the page shows <code>×</code>. Inference
+            costs a computed-style read per element, a few milliseconds on a
+            busy page. Listeners added with <code>addEventListener</code> are
+            invisible to page script, so a div with one and no pointer cursor
+            stays unlisted.
+          </p>
+        </section>
+
+        <section id="privacy">
+          <h2>Privacy</h2>
+          <p>
+            Sightline is meant to run on real users' screens, so it reads less
+            than a testing tool would:
+          </p>
+          <ul>
+            <li>Text fields show <code>[empty]</code> or nothing. Their values, passwords and contenteditable text never appear, in outlines or in <code>track</code> events.</li>
+            <li>A select shows its chosen option, since that is a fixed choice the page offered, not typed text.</li>
+            <li>Email addresses in names and text become <code>[email]</code>. Pass <code>keepEmail</code> to keep, say, your support address.</li>
+            <li><code>redact</code> runs on every name and text excerpt, for anything else you don't want to leave the page, such as account numbers.</li>
+            <li>Chat logs (<code>role="log"</code>) are listed by name only.</li>
+          </ul>
+          <pre class="code"><code class="ts">createSightline({
+  keepEmail: /@acme\.com$/,
+  redact: (text) =&gt; text.replace(/\b\d{8,}\b/g, '[number]'),
+});</code></pre>
+          <p>
+            Sightline sends nothing anywhere. What leaves the page is whatever
+            your code sends to your model.
+          </p>
+        </section>
+
+        <section id="lower-level">
+          <h2>Lower-level functions</h2>
+          <p>
+            <code>createSightline</code> is built from these, and each is
+            exported for custom setups.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Function</th><th scope="col">Purpose</th></tr></thead>
+              <tbody>
+                <tr><td><code>outline(doc?, options?, registry?)</code></td><td>One outline. Pass a <code>RefRegistry</code> to keep refs stable across calls.</td></tr>
+                <tr><td><code>findControl(name, options?, doc?)</code></td><td>A visible control by the name the outline shows.</td></tr>
+                <tr><td><code>describeElement(target, options?, doc?)</code></td><td>The control an event landed on, as <code>{ role, name, hint, element }</code>.</td></tr>
+                <tr><td><code>watchPage(doc, capture, onChange, options?)</code></td><td>The settling loop behind <code>watch</code>, with your own capture function.</td></tr>
+                <tr><td><code>trackInteractions(doc, onInteraction, options?)</code></td><td>The listeners behind <code>track</code>, without refs.</td></tr>
+                <tr><td><code>describeInteraction(interaction)</code></td><td>A short sentence such as <code>clicked button "New key"</code>.</td></tr>
+                <tr><td><code>diffLines(before, after)</code></td><td>Lines added and removed between two outlines, counting repeats.</td></tr>
+                <tr><td><code>highlight(element, options?)</code></td><td>The ring, for an element you already have. Returns a function that removes it.</td></tr>
+                <tr><td><code>RefRegistry</code></td><td>Stable <code>eN</code> refs for one document.</td></tr>
+                <tr><td><code>DEFAULT_MAX_CHARS</code></td><td>6,000.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="performance">
+          <h2>Performance</h2>
+          <p>
+            Measured in Chromium 143 on generated pages (nav, labelled forms, a
+            large table, card grids and a dialog), with <code>refs</code> and
+            <code>viewport</code> on. Each figure is the median of 20 runs
+            after 3 warm-ups (<code>pnpm bench</code>):
+          </p>
+          <div class="table-wrap">
+            <table class="numbers">
+              <thead><tr><th scope="col">Elements</th><th scope="col">Median</th><th scope="col">p95</th><th scope="col">Output</th></tr></thead>
+              <tbody>
+                <tr><td>515</td><td>0.9 ms</td><td>1.1 ms</td><td>5,971 chars</td></tr>
+                <tr><td>2,015</td><td>0.8 ms</td><td>0.9 ms</td><td>4,661 chars</td></tr>
+                <tr><td>10,015</td><td>0.9 ms</td><td>1.3 ms</td><td>4,661 chars</td></tr>
+                <tr><td>50,015</td><td>1.7 ms</td><td>1.8 ms</td><td>4,662 chars</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Long runs of similar items are counted and skipped, not walked, so
+            cost follows how varied a page is rather than how big it is. With
+            no character cap at all, the 50,000-element page still took 1.7 ms.
+            On real Anam Lab pages an outline took under 6 ms, including the
+            first, unwarmed capture.
+          </p>
+          <p>With <code>infer</code> on, measured on live sites:</p>
+          <div class="table-wrap">
+            <table class="numbers">
+              <thead><tr><th scope="col">Page</th><th scope="col">Controls</th><th scope="col">Unnamed</th><th scope="col">Time</th></tr></thead>
+              <tbody>
+                <tr><td>Deque's Mars Commuter (built inaccessible)</td><td>103 → 111</td><td>7 → 3</td><td>5.5 → 7.0 ms</td></tr>
+                <tr><td>University of Washington "before" demo</td><td>25 → 27</td><td>1 → 0</td><td>1.7 → 3.8 ms</td></tr>
+                <tr><td>TikTok Explore</td><td>23 → 28</td><td>6 → 6</td><td>1.7 → 4.5 ms</td></tr>
+                <tr><td>AliExpress home</td><td>80 → 82</td><td>0 → 0</td><td>2.8 → 4.2 ms</td></tr>
+                <tr><td>BBC home (accessible)</td><td>68 → 68</td><td>0 → 0</td><td>5.1 → 6.8 ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>On an accessible page, inference adds nothing but time.</p>
+        </section>
+
+        <section id="names">
+          <h2>Accessible names are the contract</h2>
+          <p>
+            Sightline sees what a screen reader sees. An icon button with no
+            <code>aria-label</code> reaches the agent as
+            <code>button near "…"</code>, named from the text beside it, or
+            <code>button (unlabelled)</code>. Naming your controls properly
+            makes the agent accurate, and it's good accessibility practice
+            anyway. For pages you don't control, <code>infer</code> fills some
+            of the gaps with marked guesses.
+          </p>
+          <p>
+            To see what your own app looks like to an agent, run the
+            <a href="../#bookmarklet">bookmarklet</a> on it, or try a public page
+            in the <a href="../#demo">demo</a>.
+          </p>
+        </section>
+
+        <section id="development">
+          <h2>Development</h2>
+          <pre class="code"><code>pnpm install
+pnpm test        # Vitest + happy-dom
+pnpm bench       # Chromium benchmark via Playwright (needs a local Chromium)
+pnpm build       # emits dist/
+pnpm site        # builds this site into _site/ and serves it on :4173</code></pre>
+          <p>
+            Source, issues and releases are on
+            <a href="https://github.com/Smidge/sightline">GitHub</a>. Sightline
+            is MIT licensed.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="foot">
+      <p>
+        <strong>Sightline</strong> · MIT licence · by Harry Smaje, built for
+        Anam's in-app assistant.
+      </p>
+      <nav aria-label="Footer">
+        <a href="../">Home</a>
+        <a href="https://github.com/Smidge/sightline">GitHub</a>
+        <a href="https://www.npmjs.com/package/@smidge/sightline">npm</a>
+      </nav>
+    </footer>
+  </body>
+</html>

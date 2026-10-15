@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/Smidge/sightline.git"
   },
-  "homepage": "https://github.com/Smidge/sightline#readme",
+  "homepage": "https://smidge.github.io/sightline/",
   "bugs": {
     "url": "https://github.com/Smidge/sightline/issues"
   },
@@ -38,6 +38,8 @@
     "test": "vitest run",
     "bench": "node bench/run.mjs",
     "typecheck": "tsc -p tsconfig.json",
+    "site": "node scripts/site.mjs --serve",
+    "site:build": "node scripts/site.mjs",
     "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "keywords": [
