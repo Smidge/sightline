@@ -156,6 +156,10 @@ pnpm site       # builds the GitHub Pages site (site/) into _site/ and serves it
 
 The site deploys to GitHub Pages from `main` through `.github/workflows/pages.yml`.
 
+### Releasing
+
+Bump `version` in `package.json` in the pull request. When it merges, `.github/workflows/publish.yml` publishes that version to npm with provenance, through npm trusted publishing, and creates a `v<version>` GitHub release. A version with a hyphen, such as `0.2.0-beta.1`, is published under the `next` tag. A merge that doesn't change the version publishes nothing, and pull requests run the publish as a dry run.
+
 ## License
 
 MIT

@@ -1,0 +1,66 @@
+name: Publish
+# Merging a new version in package.json to main publishes it to npm through
+# trusted publishing (OIDC): no npm token, no 2FA prompt. Pull requests
+# dry-run the same publish so packaging problems show before merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('publish-{0}', github.ref) || 'publish' }}
+  cancel-in-progress: false
+jobs:
+  dry-run:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: npm install -g npm@11
+      - run: pnpm install --frozen-lockfile
+      - id: version
+        run: .github/scripts/release-version.sh
+      - if: steps.version.outputs.publish == 'true'
+        run: npm publish --dry-run --access public --tag ${{ steps.version.outputs.tag }}
+      - if: steps.version.outputs.publish != 'true'
+        run: npm pack --dry-run
+
+  publish:
+    if: github.event_name != 'pull_request' && github.repository == 'Smidge/sightline'
+    runs-on: ubuntu-latest
+    # npm only trusts this workflow in this environment, and only main can
+    # deploy to it.
+    environment: npm
+    permissions:
+      contents: write # tag and GitHub release
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: npm install -g npm@11
+      - run: pnpm install --frozen-lockfile
+      - id: version
+        run: .github/scripts/release-version.sh
+      # prepublishOnly runs typecheck, tests and build first.
+      - if: steps.version.outputs.publish == 'true'
+        run: npm publish --access public --tag ${{ steps.version.outputs.tag }}
+      - if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          flags=()
+          if [ "$TAG" != latest ]; then flags+=(--prerelease); fi
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes "${flags[@]}"
