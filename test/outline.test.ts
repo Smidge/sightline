@@ -207,3 +207,24 @@ it('lists a details summary as a disclosure button with its open state', () => {
     '  button "First" [collapsed]',
   ]);
 });
+
+it('lists a details summary in navigation, as theme dropdown menus use', () => {
+  // Browsers hide a closed menu's links; happy-dom doesn't, so Brands has none.
+  document.body.innerHTML = `<nav aria-label="Main"><ul><li><details open><summary>Shop</summary><ul><li><a href="/men">Men</a></li></ul></details></li><li><details><summary>Brands</summary></details></li><li><a href="/sale">Sale</a></li></ul></nav>`;
+  expect(
+    outline(document, {
+      refs: true,
+      header: false,
+      location: { pathname: '/', origin: 'https://example.test' },
+    })?.lines,
+  ).toEqual([
+    'navigation "Main"',
+    '  button "Shop" [expanded] [ref=e1]',
+    '  link "Men" → /men [ref=e2]',
+    '  button "Brands" [collapsed] [ref=e3]',
+    '  link "Sale" → /sale [ref=e4]',
+  ]);
+  expect(outline(document, { header: false })?.lines).toEqual([
+    'navigation "Main": Shop · Men · Brands · Sale',
+  ]);
+});
