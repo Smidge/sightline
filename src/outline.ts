@@ -1149,9 +1149,10 @@ function walkElement(
       return;
     }
     case 'navigation': {
+      // Dropdown menus in Shopify themes open from a details summary.
       const found = visibleDescendants(
         element,
-        'a[href], button, [role="button"], [role="link"], [role="tab"]',
+        'a[href], button, details > summary:first-of-type, [role="button"], [role="link"], [role="tab"]',
         ctx,
       );
       const name = nameOf(element, ctx);
