@@ -1,5 +1,6 @@
 import { createInferState, isClickTarget, type InferState } from './infer.js';
 import {
+  EDITABLE_SELECTOR,
   INTERACTIVE_SELECTOR,
   collapse,
   createContext,
@@ -9,7 +10,7 @@ import {
   type Context,
 } from './outline.js';
 
-const FINDABLE_SELECTOR = `${INTERACTIVE_SELECTOR}, [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="progressbar"], [contenteditable="true"]`;
+const FINDABLE_SELECTOR = `${INTERACTIVE_SELECTOR}, [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="progressbar"], ${EDITABLE_SELECTOR}`;
 
 function normalizedName(text: string) {
   return collapse(text).toLowerCase();
@@ -154,7 +155,7 @@ export function describeElement(
   const start = target as Element;
   if (options.skip && start.closest(options.skip)) return null;
   const semantic =
-    start.closest('[contenteditable="true"]') ??
+    start.closest(EDITABLE_SELECTOR) ??
     start.closest(FINDABLE_SELECTOR);
   const clickable =
     !semantic && options.infer

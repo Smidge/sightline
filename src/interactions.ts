@@ -1,5 +1,11 @@
 import { describeElement } from './find.js';
-import { clip, createContext, controlStates, roleOf } from './outline.js';
+import {
+  clip,
+  createContext,
+  controlStates,
+  isEditable,
+  roleOf,
+} from './outline.js';
 
 export type Interaction = {
   type: 'click' | 'toggle' | 'select' | 'focus' | 'edit' | 'submit';
@@ -115,10 +121,9 @@ export function trackInteractions(
       return;
     }
     if (TEXT_ROLES.has(role)) {
-      const value =
-        target.getAttribute('contenteditable') === 'true'
-          ? (target.textContent ?? '')
-          : ((target as HTMLInputElement).value ?? '');
+      const value = isEditable(target)
+        ? (target.textContent ?? '')
+        : ((target as HTMLInputElement).value ?? '');
       report('edit', target, { state: value.trim() ? 'filled' : 'empty' });
     }
   };

@@ -52,6 +52,19 @@ it('omits textarea and nested editable contents even when named from another ele
   ).toBe('Notes');
 });
 
+it.each(['', 'plaintext-only'])(
+  'treats contenteditable=%j as a text field and omits its contents',
+  (value) => {
+    document.body.innerHTML = `<div contenteditable="${value}" aria-label="Notes"><p>private notes</p></div><button aria-labelledby="source">Fallback</button><span id="source">Public <span contenteditable="${value}">private label</span></span>`;
+    const editor = document.querySelector('[contenteditable]')!;
+    const text = outline(document, { header: false })!.text;
+    expect(text).toContain('textbox "Notes"');
+    expect(text).toContain('button "Public"');
+    expect(text).not.toContain('private');
+    expect(describeElement(editor.querySelector('p'))?.name).toBe('Notes');
+  },
+);
+
 it('redacts emails from titles, names, descriptions, alerts and selected options', () => {
   document.title = 'ada@example.test';
   document.body.innerHTML = `<button aria-describedby="help">Invite ada@example.test</button><p id="help">Ask bob@example.test</p><div role="alert">Contact cat@example.test</div><label>Owner<select><option>dan@example.test</option></select></label>`;

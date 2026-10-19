@@ -189,6 +189,20 @@ const LABELABLE_TAGS = new Set([
 export const INTERACTIVE_SELECTOR =
   'a[href], button, input:not([type="hidden"]), select, textarea, details > summary, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="combobox"], [role="slider"], [role="tab"], [role="menuitem"]';
 
+/**
+ * Editing hosts. `contenteditable` with no value, `true` or `plaintext-only`
+ * (in any case) makes an element editable, so its contents are typed text.
+ */
+export const EDITABLE_SELECTOR =
+  '[contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i]';
+
+const EDITABLE_VALUES = new Set(['', 'true', 'plaintext-only']);
+
+export function isEditable(element: Element): boolean {
+  const value = element.getAttribute('contenteditable');
+  return value !== null && EDITABLE_VALUES.has(value.toLowerCase());
+}
+
 /** The summary that toggles its details: the first summary child. */
 export function isDisclosureSummary(element: Element): boolean {
   const parent = element.parentElement;
@@ -344,7 +358,7 @@ export function roleOf(element: Element): string | null {
       // themes build size guides, shipping notes and menus from them.
       return isDisclosureSummary(element) ? 'button' : null;
   }
-  if (element.getAttribute('contenteditable') === 'true') return 'textbox';
+  if (isEditable(element)) return 'textbox';
   return null;
 }
 
@@ -377,7 +391,7 @@ export function textOf(
     element.localName === 'input' ||
     element.localName === 'textarea' ||
     element.localName === 'select' ||
-    element.getAttribute('contenteditable') === 'true'
+    isEditable(element)
   )
     return '';
   const label = element.getAttribute('aria-label');
@@ -595,10 +609,9 @@ export function controlStates(element: Element, role: string): string[] {
     states.push('required');
   if (TEXT_INPUT_ROLES.has(role)) {
     // Emptiness explains a disabled Save or Create; the value itself stays local.
-    const value =
-      element.getAttribute('contenteditable') === 'true'
-        ? (element.textContent ?? '')
-        : ((element as HTMLInputElement).value ?? '');
+    const value = isEditable(element)
+      ? (element.textContent ?? '')
+      : ((element as HTMLInputElement).value ?? '');
     if (!value.trim()) states.push('empty');
   }
   return states;
@@ -1102,7 +1115,7 @@ function walkElement(
     // under the card instead of folding them into its name.
     const nested =
       !isFormField(element) &&
-      element.getAttribute('contenteditable') !== 'true' &&
+      !isEditable(element) &&
       Boolean(element.querySelector(INTERACTIVE_SELECTOR));
     // A clickable div with no name, guess or row text is only noise to a
     // model; anything named inside it is still listed.

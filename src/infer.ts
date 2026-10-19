@@ -5,7 +5,12 @@
  * outline treats those as a sighted user would. Everything here is a guess,
  * so the outline marks guessed names with where they came from.
  */
-import { INTERACTIVE_SELECTOR, collapse, textOf } from './outline.js';
+import {
+  EDITABLE_SELECTOR,
+  INTERACTIVE_SELECTOR,
+  collapse,
+  textOf,
+} from './outline.js';
 
 export type InferState = {
   /** Body text size, the baseline for spotting headings by size. */
@@ -109,7 +114,7 @@ export function isClickTarget(
   // A modal box or form that stops clicks from closing it holds fields; it
   // is a container, not something to click.
   if (
-    element.querySelector('input, select, textarea, [contenteditable="true"]')
+    element.querySelector(`input, select, textarea, ${EDITABLE_SELECTOR}`)
   )
     return false;
   const rect = element.getBoundingClientRect();
