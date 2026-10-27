@@ -1,6 +1,6 @@
 {
   "name": "@smidge/sightline",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "What's on screen, as text an LLM agent can use. Runs in the page, reads the accessibility tree like a screen reader, never reads typed values.",
   "type": "module",
   "license": "MIT",
