@@ -373,8 +373,10 @@ it('reads same-origin iframe controls only with infer enabled', () => {
     'frame "Editor"',
     '  clickable "Save document"',
   ]);
+  // Without infer the frame is still mentioned, so its absence is visible.
   expect(outline(document, { header: false, infer: false })?.lines).toEqual([
     'button "Outside"',
+    'frame "Editor" (contents not included)',
   ]);
 });
 

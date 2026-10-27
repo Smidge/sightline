@@ -37,6 +37,7 @@
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "bench": "node bench/run.mjs",
+    "bench:evidence": "node bench/evidence.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "site": "node scripts/site.mjs --serve",
     "site:build": "node scripts/site.mjs",
