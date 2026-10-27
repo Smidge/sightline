@@ -1014,6 +1014,31 @@ function walkChildren(
   }
 }
 
+/**
+ * How many listed dropdowns an item sits inside, so a menu's links are
+ * indented under the summary that opened them. A summary isn't inside its
+ * own dropdown.
+ */
+function dropdownDepth(
+  item: Element,
+  nav: Element,
+  listed: Set<Element>,
+): number {
+  let depth = 0;
+  // Start above a summary's own details.
+  let node =
+    (item.localName === 'summary' ? item.parentElement : item)
+      ?.parentElement ?? null;
+  while (node && node !== nav) {
+    if (node.localName === 'details') {
+      const summary = node.querySelector(':scope > summary');
+      if (summary && listed.has(summary)) depth += 1;
+    }
+    node = node.parentElement;
+  }
+  return depth;
+}
+
 /** The direct children of `parent` that hold an error, an invalid field or an alert. */
 function itemsWithEvidence(parent: Element): Set<Element> {
   const items = new Set<Element>();
@@ -1161,9 +1186,15 @@ function walkElement(
         // [ref=e9] · C [ref=e10]" on one line picks the wrong ref.
         if (!found.length) return;
         add(walk, depth, `navigation${name ? ` ${quote(name)}` : ''}`);
+        const listed = new Set(found);
         for (const item of found) {
           const role = roleOf(item) ?? 'link';
-          add(walk, depth + 1, controlLine(item, role, walk), item);
+          add(
+            walk,
+            depth + 1 + dropdownDepth(item, element, listed),
+            controlLine(item, role, walk),
+            item,
+          );
         }
         return;
       }

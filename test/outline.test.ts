@@ -220,11 +220,29 @@ it('lists a details summary in navigation, as theme dropdown menus use', () => {
   ).toEqual([
     'navigation "Main"',
     '  button "Shop" [expanded] [ref=e1]',
-    '  link "Men" → /men [ref=e2]',
+    '    link "Men" → /men [ref=e2]',
     '  button "Brands" [collapsed] [ref=e3]',
     '  link "Sale" → /sale [ref=e4]',
   ]);
   expect(outline(document, { header: false })?.lines).toEqual([
     'navigation "Main": Shop · Men · Brands · Sale',
+  ]);
+});
+
+it('indents an open dropdown under its summary, nested menus deeper', () => {
+  document.body.innerHTML = `<nav aria-label="Mobile"><details open><summary>Shop</summary><ul><li><details open><summary>Footwear</summary><ul><li><a href="/trail">Trail</a></li></ul></details></li><li><a href="/socks">Socks</a></li></ul></details><a href="/sale">Sale</a></nav>`;
+  expect(
+    outline(document, {
+      refs: true,
+      header: false,
+      location: { pathname: '/', origin: 'https://example.test' },
+    })?.lines,
+  ).toEqual([
+    'navigation "Mobile"',
+    '  button "Shop" [expanded] [ref=e1]',
+    '    button "Footwear" [expanded] [ref=e2]',
+    '      link "Trail" → /trail [ref=e3]',
+    '    link "Socks" → /socks [ref=e4]',
+    '  link "Sale" → /sale [ref=e5]',
   ]);
 });
