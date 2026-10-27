@@ -28,6 +28,13 @@ export type WatchOptions = {
   navigationSettleMs?: number;
   /** Minimum gap between two captures while the page is busy. Default 150 ms. */
   throttleMs?: number;
+  /**
+   * Longest a change waits for the page to hold still. A page that never
+   * does (a progress counter, a ticking clock, controls that keep
+   * re-rendering) is reported at this interval instead of never. Default
+   * 2,000 ms.
+   */
+  maxWaitMs?: number;
   /** Safety poll for changes no mutation reports (typed values, history). Default 1,500 ms. */
   pollMs?: number;
   /** Report plain updates, not only navigation, dialogs and alerts. Default true. */
@@ -42,6 +49,17 @@ export type WatchOptions = {
 
 const DIALOG_LINE = /^\s*(?:dialog|alertdialog)(?: "(.*)")? \(open\)/;
 const ALERT_LINE = /^\s*(alert|toast|status) "(.*)"/;
+/** Messages worth reporting before the page settles; status lines change too often. */
+const URGENT_LINE = /^\s*(?:alert|toast|alertdialog) "|^\s*dialog(?: "|\s+\()|error "/;
+const REF = / \[ref=e\d+\]/g;
+
+/** A new urgent line, ignoring refs: a remounted control with the same error isn't new. */
+function hasNewUrgentLine(before: Outline | null, now: Outline): boolean {
+  const seen = new Set(before?.lines.map((line) => line.replace(REF, '')));
+  return now.lines.some(
+    (line) => URGENT_LINE.test(line) && !seen.has(line.replace(REF, '')),
+  );
+}
 
 function dialogsIn(outline: Outline): string[] {
   const names: string[] = [];
@@ -92,6 +110,7 @@ export function watchPage(
   const navigationSettleMs = options.navigationSettleMs ?? 700;
   const throttleMs = options.throttleMs ?? 150;
   const pollMs = options.pollMs ?? 1_500;
+  const maxWaitMs = options.maxWaitMs ?? 2_000;
   const reportUpdates = options.updates ?? true;
   const view = doc.defaultView;
   const currentPath =
@@ -106,8 +125,13 @@ export function watchPage(
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
   let lastCheck = 0;
   let stopped = false;
+  /** When the first unreported change was seen, and the first urgent one. */
+  let pendingSince: number | null = null;
+  let urgentSince: number | null = null;
 
   const emit = (outline: Outline, path: string, kind?: PageChangeKind) => {
+    pendingSince = null;
+    urgentSince = null;
     const previous = emitted;
     const diff = diffLines(previous?.text ?? '', outline.text);
     const dialogsBefore = previous ? dialogsIn(previous) : [];
@@ -140,8 +164,25 @@ export function watchPage(
     if (emitted && path === emittedPath && outline.text === emitted.text) {
       // Back where we were: nothing to report.
       candidate = null;
+      pendingSince = null;
+      urgentSince = null;
       if (settleTimer) clearTimeout(settleTimer);
       settleTimer = null;
+      return;
+    }
+    const now = Date.now();
+    pendingSince ??= now;
+    // A new dialog, alert or error shouldn't wait behind a busy widget.
+    if (urgentSince === null && hasNewUrgentLine(emitted, outline))
+      urgentSince = now;
+    if (
+      now - pendingSince >= maxWaitMs ||
+      (urgentSince !== null && now - urgentSince >= settleMs)
+    ) {
+      candidate = null;
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = null;
+      emit(outline, path);
       return;
     }
     if (key === candidate) return;
@@ -189,8 +230,22 @@ export function watchPage(
   observer?.observe(doc.body, {
     subtree: true,
     childList: true,
+    // Frameworks update text in place (React sets a text node's value).
+    characterData: true,
     attributes: true,
     attributeFilter: [
+      'aria-label',
+      'aria-labelledby',
+      'aria-describedby',
+      'aria-description',
+      'aria-errormessage',
+      'aria-required',
+      'aria-valuenow',
+      'aria-valuetext',
+      'aria-haspopup',
+      'role',
+      'title',
+      'href',
       'aria-expanded',
       'aria-hidden',
       'aria-selected',

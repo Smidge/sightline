@@ -67,6 +67,14 @@ export type OutlineOptions = {
    * read per element. Default false.
    */
   infer?: boolean;
+  /**
+   * A note the product supplies for a listed control, such as why a button
+   * is disabled: `button "Place order" [disabled] — note "Add a delivery
+   * address first"`. Return nothing to add no note. Notes get the same
+   * redaction and length limit as page text. Only called for controls the
+   * walk reaches and would list, never hidden or skipped ones.
+   */
+  annotate?: (element: Element, role: string) => string | null | undefined;
 };
 
 export type OutlineStats = {
@@ -75,6 +83,10 @@ export type OutlineStats = {
   visited: number;
   controls: number;
   truncated: boolean;
+  /** Which budget cut the outline short, if any. */
+  truncatedBy: 'characters' | 'elements' | null;
+  /** Content-sized frames whose contents the outline doesn't include. */
+  framesNotRead: number;
   ms: number;
 };
 
@@ -90,6 +102,14 @@ export const DEFAULT_MAX_CHARS = 6_000;
 const DEFAULT_MAX_ELEMENTS = 20_000;
 const NAME_MAX = 100;
 const TEXT_MAX = 240;
+/** Frames listed one per line before the rest are only counted. */
+const FRAME_LINES_MAX = 8;
+/** Errors and alerts kept after a cut, and the work spent finding them. */
+const LATE_EVIDENCE_LINES = 8;
+const LATE_EVIDENCE_CANDIDATES = 50;
+/** Controls and messages an agent needs even when the outline is cut short. */
+const EVIDENCE_SELECTOR =
+  '[aria-invalid]:not([aria-invalid="false"]):not([aria-invalid=""]), [role="alert"], [role="alertdialog"]';
 // Only try at the start of a local-part run; retrying every suffix is quadratic
 // on long non-email text. Redact the whole address before applying the budget.
 const EMAIL_RE = /(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -226,13 +246,14 @@ export type Context = {
   labelsFor: Map<string, Element> | null;
   /** Set when `infer` is on. */
   infer: InferState | null;
+  annotate: OutlineOptions['annotate'] | null;
 };
 
 export function createContext(
   doc: Document,
   options: Pick<
     OutlineOptions,
-    'skip' | 'keepEmail' | 'redact' | 'hintAttribute' | 'infer'
+    'skip' | 'keepEmail' | 'redact' | 'hintAttribute' | 'infer' | 'annotate'
   > = {},
 ): Context {
   return {
@@ -243,6 +264,7 @@ export function createContext(
     hintAttribute: options.hintAttribute ?? 'data-testid',
     labelsFor: null,
     infer: options.infer ? createInferState(doc) : null,
+    annotate: options.annotate ?? null,
   };
 }
 
@@ -412,20 +434,39 @@ export function textOf(
   return text;
 }
 
+/**
+ * The elements an ID-list attribute points at, in order and once each. A
+ * missing ID is ignored, and so is anything in a skipped subtree: the
+ * agent's own panel stays out even when a control points into it.
+ */
+function referencedElements(
+  element: Element,
+  attribute: string,
+  ctx: Context,
+): Element[] {
+  const value = element.getAttribute(attribute);
+  if (!value) return [];
+  const root = idRoot(element, ctx);
+  const found: Element[] = [];
+  for (const id of value.split(/\s+/)) {
+    const target = id ? root.getElementById(id) : null;
+    if (!target || found.includes(target)) continue;
+    if (ctx.skip && target.closest(ctx.skip)) continue;
+    found.push(target);
+  }
+  return found;
+}
+
 function referencedText(
   element: Element,
   attribute: string,
   ctx: Context,
 ): string {
-  const value = element.getAttribute(attribute);
-  if (!value) return '';
-  let text = '';
-  const root = idRoot(element, ctx);
-  for (const id of value.split(/\s+/)) {
-    const target = id ? root.getElementById(id) : null;
-    if (target) text += ` ${textOf(target)}`;
-  }
-  return collapse(text);
+  return collapse(
+    referencedElements(element, attribute, ctx)
+      .map((target) => textOf(target))
+      .join(' '),
+  );
 }
 
 function isFormField(element: Element): boolean {
@@ -560,6 +601,12 @@ function hasAnyName(element: Element, ctx: Context, nested: boolean): boolean {
   );
 }
 
+/** `aria-invalid` with any value but false: true, grammar or spelling. */
+function isInvalid(element: Element): boolean {
+  const value = element.getAttribute('aria-invalid')?.trim().toLowerCase();
+  return Boolean(value) && value !== 'false';
+}
+
 function isDisabled(element: Element): boolean {
   return (
     (element as HTMLButtonElement).disabled === true ||
@@ -608,7 +655,8 @@ export function controlStates(element: Element, role: string): string[] {
   )
     states.push('required');
   if (TEXT_INPUT_ROLES.has(role)) {
-    // Emptiness explains a disabled Save or Create; the value itself stays local.
+    // Whether a field is empty is evidence an agent can weigh; the value
+    // itself stays local. It doesn't say why another control is disabled.
     const value = isEditable(element)
       ? (element.textContent ?? '')
       : ((element as HTMLInputElement).value ?? '');
@@ -652,10 +700,46 @@ function controlValue(
   return shown ? clip(ctx, shown) : null;
 }
 
-function describedBy(element: Element, ctx: Context): string {
-  const description = referencedText(element, 'aria-describedby', ctx);
-  const error = referencedText(element, 'aria-errormessage', ctx);
-  return clip(ctx, [description, error].filter(Boolean).join(' '), TEXT_MAX);
+/**
+ * What the page says about a control, kept apart: its description
+ * (`aria-describedby`, else `aria-description`) and its error message. An
+ * `aria-errormessage` only counts while the control is invalid, as ARIA
+ * specifies, so a stale message left in the page isn't reported. Text that
+ * is both is reported once, as the error.
+ */
+function evidenceOf(
+  element: Element,
+  ctx: Context,
+): { description: string; error: string } {
+  const errors = isInvalid(element)
+    ? referencedElements(element, 'aria-errormessage', ctx)
+    : [];
+  const described = referencedElements(element, 'aria-describedby', ctx).filter(
+    (target) => !errors.includes(target),
+  );
+  const description =
+    collapse(described.map((target) => textOf(target)).join(' ')) ||
+    (element.getAttribute('aria-description') ?? '');
+  return {
+    description: clip(ctx, description, TEXT_MAX),
+    error: clip(
+      ctx,
+      errors.map((target) => textOf(target)).join(' '),
+      TEXT_MAX,
+    ),
+  };
+}
+
+/** The product's note for a control, if it gives one. A failing hook adds nothing. */
+function noteFor(element: Element, role: string, ctx: Context): string {
+  if (!ctx.annotate) return '';
+  let note: unknown;
+  try {
+    note = ctx.annotate(element, role);
+  } catch {
+    return '';
+  }
+  return typeof note === 'string' ? clip(ctx, note, TEXT_MAX) : '';
 }
 
 function linkTarget(
@@ -768,6 +852,13 @@ type Walk = {
   visited: number;
   controls: number;
   truncated: boolean;
+  truncatedBy: OutlineStats['truncatedBy'];
+  /** Controls, alerts and dialogs whose lines are in the outline. */
+  listed: Set<Element>;
+  /** The element each line describes, where there is one. */
+  owners: (Element | null)[];
+  framesNotRead: number;
+  frameLines: number;
   tablists: WeakSet<Element>;
   maxChars: number;
   maxElements: number;
@@ -778,14 +869,17 @@ type Walk = {
   viewport: boolean;
 };
 
-function add(walk: Walk, depth: number, line: string) {
+function add(walk: Walk, depth: number, line: string, owner?: Element) {
   if (walk.truncated) return;
   const text = `${'  '.repeat(depth)}${line}`;
   if (walk.chars + text.length + 1 > walk.maxChars) {
     walk.truncated = true;
+    walk.truncatedBy ??= 'characters';
     return;
   }
   walk.lines.push(text);
+  walk.owners.push(owner ?? null);
+  if (owner) walk.listed.add(owner);
   walk.chars += text.length + 1;
 }
 
@@ -801,8 +895,9 @@ function controlLine(
   const value = controlValue(element, role, ctx);
   const target = role === 'link' ? linkTarget(element, walk.location) : null;
   const states = controlStates(element, role);
-  const invalid = element.getAttribute('aria-invalid') === 'true';
-  const description = describedBy(element, ctx);
+  const invalid = isInvalid(element);
+  const { description, error } = evidenceOf(element, ctx);
+  const note = noteFor(element, role, ctx);
   const symbol = ctx.infer && name ? symbolName(name) : null;
   let line = name
     ? symbol
@@ -833,6 +928,8 @@ function controlLine(
     line += ` [ref=${ref}]`;
   }
   if (description) line += ` — ${quote(description)}`;
+  if (error) line += ` — error ${quote(error)}`;
+  if (note) line += ` — note ${quote(note)}`;
   walk.controls += 1;
   return line;
 }
@@ -885,6 +982,13 @@ function walkChildren(
     }
   }
   const seen = totals ? new Map<string, number>() : null;
+  // An item with an error or alert is kept even past the first few, so
+  // shortening a list never hides the one row that explains a problem.
+  const exceptional =
+    totals && [...totals.values()].some((total) => total >= walk.repeatMin)
+      ? itemsWithEvidence(element)
+      : null;
+  const shown = new Map<string, number>();
   for (let i = 0; i < count; i += 1) {
     if (walk.truncated) return;
     const child = children[i];
@@ -895,8 +999,13 @@ function walkChildren(
         const index = (seen.get(key) ?? 0) + 1;
         seen.set(key, index);
         if (index > walk.repeatKeep) {
-          if (index === total)
-            add(walk, depth, `… ${total - walk.repeatKeep} more similar items`);
+          if (exceptional?.has(child)) {
+            walkElement(child, depth, walk, parentPointer);
+            shown.set(key, (shown.get(key) ?? 0) + 1);
+          }
+          const hidden = total - walk.repeatKeep - (shown.get(key) ?? 0);
+          if (index === total && hidden > 0)
+            add(walk, depth, `… ${hidden} more similar items`);
           continue;
         }
       }
@@ -905,10 +1014,27 @@ function walkChildren(
   }
 }
 
+/** The direct children of `parent` that hold an error, an invalid field or an alert. */
+function itemsWithEvidence(parent: Element): Set<Element> {
+  const items = new Set<Element>();
+  for (const found of parent.querySelectorAll(EVIDENCE_SELECTOR)) {
+    if (found.closest('[aria-hidden="true"], [hidden], [inert]') || !isRendered(found))
+      continue;
+    let node: Element | null = found;
+    while (node && node.parentElement !== parent) node = node.parentElement;
+    if (node) items.add(node);
+  }
+  return items;
+}
+
 /**
- * A same-origin frame is read like part of the page. Another site's frame
- * can't be read, so only its title is listed, and only when it is big
- * enough to be content rather than a tracking pixel.
+ * A frame big enough to be content is always mentioned, so an agent knows
+ * part of the page is outside the outline. With `infer`, a frame whose
+ * document is reachable is read like part of the page. Otherwise the line
+ * says the contents are not included (infer is off) or not readable (the
+ * document wasn't available, for whatever reason: another origin, a
+ * sandbox, still loading). Tracking-pixel frames are left out, and after a
+ * few frame lines the rest are only counted.
  */
 function walkFrame(frame: HTMLIFrameElement, depth: number, walk: Walk) {
   const rect = frame.getBoundingClientRect();
@@ -919,17 +1045,29 @@ function walkFrame(frame: HTMLIFrameElement, depth: number, walk: Walk) {
     frame.title || frame.getAttribute('aria-label') || frame.name || '',
   );
   let body: HTMLElement | null = null;
-  try {
-    body = frame.contentDocument?.body ?? null;
-  } catch {
-    body = null;
+  if (walk.ctx.infer) {
+    try {
+      body = frame.contentDocument?.body ?? null;
+    } catch {
+      body = null;
+    }
   }
   if (body) {
     add(walk, depth, `frame${title ? ` ${quote(title)}` : ''}`);
     walkElement(body, depth + 1, walk);
-  } else if (title) {
-    add(walk, depth, `frame ${quote(title)} (another site, not readable)`);
+    return;
   }
+  walk.framesNotRead += 1;
+  if (walk.frameLines >= FRAME_LINES_MAX) return;
+  walk.frameLines += 1;
+  const why = walk.ctx.infer
+    ? 'contents not readable'
+    : 'contents not included';
+  add(
+    walk,
+    depth,
+    title ? `frame ${quote(title)} (${why})` : `frame (unnamed, ${why})`,
+  );
 }
 
 function walkElement(
@@ -942,11 +1080,11 @@ function walkElement(
   walk.visited += 1;
   if (walk.visited > walk.maxElements) {
     walk.truncated = true;
+    walk.truncatedBy ??= 'elements';
     return;
   }
   const { ctx } = walk;
   if (
-    ctx.infer &&
     element.localName === 'iframe' &&
     !(ctx.skip !== null && element.matches(ctx.skip)) &&
     !isAriaHidden(element) &&
@@ -1024,7 +1162,7 @@ function walkElement(
         add(walk, depth, `navigation${name ? ` ${quote(name)}` : ''}`);
         for (const item of found) {
           const role = roleOf(item) ?? 'link';
-          add(walk, depth + 1, controlLine(item, role, walk));
+          add(walk, depth + 1, controlLine(item, role, walk), item);
         }
         return;
       }
@@ -1051,7 +1189,7 @@ function walkElement(
         if (found.length) {
           add(walk, depth, 'tabs');
           for (const tab of found)
-            add(walk, depth + 1, controlLine(tab, 'tab', walk));
+            add(walk, depth + 1, controlLine(tab, 'tab', walk), tab);
         }
       } else {
         const tabs = found.map((tab) => {
@@ -1079,13 +1217,13 @@ function walkElement(
       return;
     }
     case 'progressbar':
-      add(walk, depth, controlLine(element, role, walk));
+      add(walk, depth, controlLine(element, role, walk), element);
       return;
     case 'alert':
     case 'status':
     case 'tooltip': {
       const text = clip(ctx, textOf(element), TEXT_MAX);
-      if (text) add(walk, depth, `${role} ${quote(text)}`);
+      if (text) add(walk, depth, `${role} ${quote(text)}`, element);
       return;
     }
     case 'label':
@@ -1123,7 +1261,7 @@ function walkElement(
       walkChildren(element, depth, walk, pointer);
       return;
     }
-    add(walk, depth, controlLine(element, role, walk, nested));
+    add(walk, depth, controlLine(element, role, walk, nested), element);
     // A clickable div can hold its own clickable parts (a card's heart
     // icon), which only show up by walking it.
     if (
@@ -1142,7 +1280,7 @@ function walkElement(
         ? `${role}${name ? ` ${quote(name)}` : ''} (open)`
         : `${role}${name && role !== 'main' ? ` ${quote(name)}` : ''}`;
     const start = walk.lines.length;
-    add(walk, depth, header);
+    add(walk, depth, header, element);
     if (role === 'dialog' || role === 'alertdialog') {
       const description = referencedText(element, 'aria-describedby', ctx);
       if (description)
@@ -1152,6 +1290,7 @@ function walkElement(
     // An empty landmark (like a toast region with no toasts) is noise.
     if (walk.lines.length === start + 1 && !walk.truncated) {
       const [removed] = walk.lines.splice(start, 1);
+      walk.owners.splice(start, 1);
       walk.chars -= (removed?.length ?? 0) + 1;
     }
     return;
@@ -1210,6 +1349,121 @@ function scrollLine(doc: Document): string | null {
 }
 
 /**
+ * Errors, invalid fields and alerts the walk didn't reach before a budget ran
+ * out. Each is checked like a walked element (skip, hidden, behind a modal)
+ * and the search stops after a fixed number of candidates.
+ */
+function lateEvidence(
+  scope: Element,
+  walk: Walk,
+): { line: string; element: Element }[] {
+  const { ctx } = walk;
+  const lines: { line: string; element: Element }[] = [];
+  let checked = 0;
+  for (const element of scope.querySelectorAll(EVIDENCE_SELECTOR)) {
+    if (checked++ >= LATE_EVIDENCE_CANDIDATES) break;
+    if (walk.listed.has(element) || lines.length >= LATE_EVIDENCE_LINES)
+      continue;
+    if (
+      (ctx.skip && element.closest(ctx.skip)) ||
+      element.closest('[aria-hidden="true"], [hidden], [inert]') ||
+      !isRendered(element)
+    )
+      continue;
+    const role = roleOf(element);
+    if (role === 'alert' || role === 'alertdialog') {
+      const text = clip(
+        ctx,
+        role === 'alert' ? textOf(element) : nameOf(element, ctx),
+        TEXT_MAX,
+      );
+      if (text) lines.push({ line: `${role} ${quote(text)}`, element });
+    } else if (role && CONTROL_ROLES.has(role)) {
+      lines.push({ line: controlLine(element, role, walk), element });
+    }
+  }
+  return lines;
+}
+
+/**
+ * Ends the outline with what it couldn't cover. A cut outline says which
+ * budget ran out and keeps errors and alerts from beyond the cut, in up to a
+ * quarter of the budget: earlier lines make room, and any that turn out not
+ * to be needed go back. Frames past the per-page limit are counted. Refs
+ * whose lines were dropped are forgotten.
+ */
+function finish(walk: Walk, scope: Element) {
+  const ending: string[] = [];
+  const unlisted = walk.framesNotRead - walk.frameLines;
+  if (unlisted > 0)
+    ending.push(
+      `… (${unlisted} more frame${unlisted === 1 ? '' : 's'} not listed)`,
+    );
+  if (walk.truncated)
+    ending.push(
+      `… (outline truncated: ${walk.truncatedBy === 'elements' ? 'element' : 'character'} limit)`,
+    );
+  if (!ending.length) return;
+  const size = (lines: string[]) =>
+    lines.reduce((sum, line) => sum + line.length + 1, 0);
+  const room = walk.truncated
+    ? Math.min(Math.floor(walk.maxChars / 4), 1_500)
+    : 0;
+  const popped: { line: string; owner: Element | null }[] = [];
+  const pop = () => {
+    const line = walk.lines.pop()!;
+    const owner = walk.owners.pop() ?? null;
+    if (owner) walk.listed.delete(owner);
+    walk.chars -= line.length + 1;
+    popped.push({ line, owner });
+  };
+  while (walk.lines.length && walk.chars + size(ending) + room > walk.maxChars)
+    pop();
+  const late: string[] = [];
+  const reported = new Set<Element>();
+  if (walk.truncated) {
+    const header = 'Errors and alerts after the cut:';
+    let used = header.length + 1;
+    for (const { line, element } of lateEvidence(scope, walk)) {
+      if (used + line.length + 3 > room) break;
+      late.push(`  ${line}`);
+      reported.add(element);
+      used += line.length + 3;
+    }
+    if (late.length) late.unshift(header);
+  }
+  // Put back what the late evidence didn't need, in order, skipping any
+  // element that is now reported after the cut instead.
+  while (popped.length) {
+    const { line, owner } = popped[popped.length - 1];
+    if (
+      walk.chars + line.length + 1 + size(ending) + size(late) >
+      walk.maxChars
+    )
+      break;
+    popped.pop();
+    if (owner && reported.has(owner)) continue;
+    walk.lines.push(line);
+    walk.owners.push(owner);
+    walk.chars += line.length + 1;
+  }
+  const tail = [...ending, ...late];
+  // A budget too small for the ending keeps as much of it as fits.
+  while (tail.length > 1 && walk.chars + size(tail) > walk.maxChars) tail.pop();
+  if (walk.chars + size(tail) > walk.maxChars)
+    tail[0] = tail[0].slice(0, Math.max(0, walk.maxChars - walk.chars));
+  walk.lines.push(...tail);
+  walk.chars += size(tail);
+  const kept = new Set(
+    walk.lines.flatMap((line) =>
+      [...line.matchAll(/\[ref=(e\d+)\]/g)].map((match) => match[1]),
+    ),
+  );
+  for (const ref of walk.refMap.keys())
+    if (!kept.has(ref)) walk.refMap.delete(ref);
+}
+
+/**
  * Outline the page. Returns null when nothing useful was found, so a failed
  * capture never blocks the caller.
  */
@@ -1231,6 +1485,11 @@ export function outline(
     visited: 0,
     controls: 0,
     truncated: false,
+    truncatedBy: null,
+    listed: new Set(),
+    owners: [],
+    framesNotRead: 0,
+    frameLines: 0,
     tablists: new WeakSet(),
     maxChars: options.maxChars ?? DEFAULT_MAX_CHARS,
     maxElements: options.maxElements ?? DEFAULT_MAX_ELEMENTS,
@@ -1268,13 +1527,7 @@ export function outline(
     walkElement(body, 0, walk);
   }
   if (walk.lines.length === headerLines) return null;
-  if (walk.truncated) {
-    const marker = '… (outline truncated)'.slice(0, Math.max(0, walk.maxChars));
-    while (walk.lines.length && walk.chars + marker.length > walk.maxChars) {
-      walk.chars -= walk.lines.pop()!.length + 1;
-    }
-    walk.lines.push(marker);
-  }
+  finish(walk, overlay ?? body);
   const text = walk.lines.join('\n');
   const ended =
     typeof performance === 'undefined' ? Date.now() : performance.now();
@@ -1288,6 +1541,8 @@ export function outline(
       visited: walk.visited,
       controls: walk.controls,
       truncated: walk.truncated,
+      truncatedBy: walk.truncatedBy,
+      framesNotRead: walk.framesNotRead,
       ms: ended - started,
     },
   };

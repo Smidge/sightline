@@ -8,7 +8,7 @@ export type Token = { kind: string | null; text: string };
 
 const HEADER = /^(Page|Title|Viewport|Scroll):/;
 const PART =
-  /("[^"]*")|(\[ref=e\d+\])|(\[[^\]]*\])|(\((?:guessed from|unlabelled|open|another site)[^)]*\))|(→ \S+)|( — )/g;
+  /("[^"]*")|(\[ref=e\d+\])|(\[[^\]]*\])|(\((?:guessed from|unlabelled|open|another site|unnamed|contents not|outline truncated|\d+ more frames?)[^)]*\))|(→ \S+)|( — (?:error |note )?)/g;
 const PART_KINDS = ['name', 'ref', 'state', 'note', 'target', 'dash'];
 
 export function tokenize(line: string): Token[] {

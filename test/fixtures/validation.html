@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Create API key · Example</title></head><body>
+<main><h1>Create API key</h1>
+<form aria-label="New key">
+<label for="name">Key name</label><input id="name" required aria-invalid="true" aria-describedby="name-hint" aria-errormessage="name-error">
+<p id="name-hint">Shown in your audit log.</p><p id="name-error">Enter a key name.</p>
+<label for="scope">Scope</label><input id="scope" value="read:invoices" aria-describedby="scope-hint scope-count">
+<p id="scope-hint">Comma-separated scopes.</p><p id="scope-count">1 of 10 scopes used.</p>
+<label for="note">Note</label><input id="note" aria-describedby="note-hint missing-id">
+<p id="note-hint">Only you can see this.</p>
+<label for="expires">Expires</label><input id="expires" aria-errormessage="expires-error">
+<p id="expires-error" hidden>Choose a date in the future.</p>
+<label for="ip">Allowed IPs</label><input id="ip" aria-invalid="true" aria-describedby="ip-error" aria-errormessage="ip-error">
+<p id="ip-error">Enter IP addresses as 203.0.113.7 or 203.0.113.0/24.</p>
+<label for="owner">Owner email</label><input id="owner" aria-invalid="true" aria-errormessage="owner-error">
+<p id="owner-error">jo@example.com is not a member of this team.</p>
+<button type="submit" disabled>Create key</button>
+<button type="button" disabled aria-describedby="rotate-why">Rotate key</button><p id="rotate-why">You need the Admin role to rotate keys.</p>
+</form></main></body></html>

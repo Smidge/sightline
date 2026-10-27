@@ -67,6 +67,7 @@
           <li><a href="#watching">Watching a live page</a></li>
           <li><a href="#tracking">Tracking the user</a></li>
           <li><a href="#infer">Pages without semantic HTML</a></li>
+          <li><a href="#limits">Evidence and limits</a></li>
           <li><a href="#privacy">Privacy</a></li>
           <li><a href="#lower-level">Lower-level functions</a></li>
           <li><a href="#performance">Performance</a></li>
@@ -176,12 +177,14 @@ sightline.highlight('New Key'); // or by visible name</code></pre>
             accessible name in quotes. Everything after the name is optional.
           </p>
           <pre data-outline>
-textbox "Label" [required, empty, invalid] [ref=e1] — "Enter a label."</pre>
+textbox "Label" [required, empty, invalid] [ref=e1] — "Shown in your audit log." — error "Enter a label."</pre>
           <p>
             That line is a text field named "Label". It's required, has nothing
-            in it and is marked invalid, its ref is <code>e1</code>, and the
-            text after the dash is the error message it points to with
-            <code>aria-describedby</code> or <code>aria-errormessage</code>.
+            in it and is marked invalid, and its ref is <code>e1</code>. The
+            quoted text after the first dash is its description, from
+            <code>aria-describedby</code>. The part after <code>— error</code>
+            is the message it points to with <code>aria-errormessage</code>,
+            reported only while the field is invalid.
           </p>
 
           <h3 id="format-header">Header lines</h3>
@@ -211,7 +214,9 @@ textbox "Label" [required, empty, invalid] [ref=e1] — "Enter a label."</pre>
                 <tr><td>Destination</td><td><code>link "Docs" → /docs</code></td><td>Where a link goes: a path on the same site, host and path on another.</td></tr>
                 <tr><td>States</td><td><code>[current]</code> <code>[checked]</code> <code>[on]</code> <code>[collapsed, opens menu]</code></td><td>See the list below.</td></tr>
                 <tr><td>Ref</td><td><code>[ref=e12]</code></td><td>A handle for <code>find</code> and <code>highlight</code>. On by default in <code>createSightline</code>.</td></tr>
-                <tr><td>Description</td><td><code>— "Enter a label."</code></td><td>Text from <code>aria-describedby</code> or <code>aria-errormessage</code>.</td></tr>
+                <tr><td>Description</td><td><code>— "Shown in your audit log."</code></td><td>Text from <code>aria-describedby</code>, or <code>aria-description</code>.</td></tr>
+                <tr><td>Error</td><td><code>— error "Enter a label."</code></td><td>Text from <code>aria-errormessage</code>, only while the control is invalid.</td></tr>
+                <tr><td>Note</td><td><code>— note "Add an address first"</code></td><td>Your app's note, from <a href="#limits"><code>annotate</code></a>.</td></tr>
                 <tr><td>Guess</td><td><code>(guessed from icon)</code></td><td>A name inferred by <code>infer</code>, and where it came from.</td></tr>
               </tbody>
             </table>
@@ -237,11 +242,13 @@ textbox "Label" [required, empty, invalid] [ref=e1] — "Enter a label."</pre>
                 <tr><td><code>dialog "Delete key?" (open)</code></td><td>An open dialog. When it's modal, the page behind it isn't listed.</td></tr>
                 <tr><td><code>tabs</code></td><td>A tab list, one tab per line with refs on.</td></tr>
                 <tr><td><code>table: columns Name | Key | Created; 9 rows</code></td><td>A table as its column headers and row count. Controls inside rows are listed under it.</td></tr>
-                <tr><td><code>… 6 more similar items</code></td><td>A run of similar items, shortened to the first three (<code>repeatKeep</code>) once it reaches eight (<code>repeatMin</code>).</td></tr>
+                <tr><td><code>… 6 more similar items</code></td><td>A run of similar items, shortened to the first three (<code>repeatKeep</code>) once it reaches eight (<code>repeatMin</code>). An item with an invalid field or an alert is kept wherever it falls.</td></tr>
+                <tr><td><code>frame "Card number" (contents not included)</code>, <code>frame (unnamed, contents not readable)</code></td><td>A frame whose contents aren't in the outline. See <a href="#limits">Evidence and limits</a>.</td></tr>
                 <tr><td><code>alert "Payment failed."</code>, <code>status "Saved"</code>, <code>toast "Key copied"</code></td><td>Messages from alert and status roles, short live regions and Sonner toasts.</td></tr>
                 <tr><td><code>label "Plan"</code>, <code>legend "Billing address"</code></td><td>Labels and legends that don't belong to a single field.</td></tr>
                 <tr><td><code>log "Conversation"</code></td><td>A <code>role="log"</code> region. Only its name is listed: chat logs hold what people said.</td></tr>
-                <tr><td><code>… (outline truncated)</code></td><td>The outline reached <code>maxChars</code> or <code>maxElements</code>.</td></tr>
+                <tr><td><code>… (outline truncated: character limit)</code>, <code>… (outline truncated: element limit)</code></td><td>The outline reached <code>maxChars</code> or <code>maxElements</code>.</td></tr>
+                <tr><td><code>Errors and alerts after the cut:</code></td><td>Invalid fields and alerts the walk didn't reach before the cut, listed after it.</td></tr>
               </tbody>
             </table>
           </div>
@@ -320,6 +327,8 @@ for (const [, ref] of reply.matchAll(/\[ref=(e\d+)\]/g)) sightline.highlight(ref
     visited: number; // elements walked
     controls: number;
     truncated: boolean;
+    truncatedBy: 'characters' | 'elements' | null;
+    framesNotRead: number; // content-sized frames not in the outline
     ms: number;
   };
 };</code></pre>
@@ -391,7 +400,7 @@ for (const [, ref] of reply.matchAll(/\[ref=(e\d+)\]/g)) sightline.highlight(ref
               <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Purpose</th></tr></thead>
               <tbody>
                 <tr><td><code>skip</code></td><td>none</td><td>Selector for subtrees to leave out, such as your agent's panel</td></tr>
-                <tr><td><code>maxChars</code></td><td>6,000</td><td>Character budget. The outline ends with <code>… (outline truncated)</code></td></tr>
+                <tr><td><code>maxChars</code></td><td>6,000</td><td>Character budget. A cut outline ends with <code>… (outline truncated: character limit)</code></td></tr>
                 <tr><td><code>maxElements</code></td><td>20,000</td><td>Element budget for one walk</td></tr>
                 <tr><td><code>refs</code></td><td><code>true</code> in <code>createSightline</code>, else <code>false</code></td><td>Add <code>[ref=eN]</code> to controls, one control per line</td></tr>
                 <tr><td><code>viewport</code></td><td><code>false</code></td><td>Mark <code>[offscreen]</code> controls and add a <code>Scroll:</code> line</td></tr>
@@ -404,6 +413,7 @@ for (const [, ref] of reply.matchAll(/\[ref=(e\d+)\]/g)) sightline.highlight(ref
                 <tr><td><code>hintAttribute</code></td><td><code>data-testid</code></td><td>Quoted for a control with no name and no nearby text</td></tr>
                 <tr><td><code>repeatMin</code> / <code>repeatKeep</code></td><td>8 / 3</td><td>When a run of similar items is shortened, and how many are kept</td></tr>
                 <tr><td><code>infer</code></td><td><code>false</code></td><td>Also read pages built without semantic HTML (<a href="#infer">see below</a>)</td></tr>
+                <tr><td><code>annotate</code></td><td>none</td><td>Adds your app's note to a listed control (<a href="#limits">see below</a>)</td></tr>
               </tbody>
             </table>
           </div>
@@ -447,6 +457,14 @@ main
             every 1.5 s catches changes that no mutation reports, and mutations
             inside <code>skip</code> are ignored.
           </p>
+          <p>On busy pages:</p>
+          <ul>
+            <li>A page that never holds still, such as a progress counter or a list that keeps re-rendering, is reported at least every 2 s (<code>maxWaitMs</code>) instead of never.</li>
+            <li>A new alert, dialog or error message is reported about 250 ms after it appears, even while something else keeps changing.</li>
+            <li>Text edited in place and changes to names, descriptions and error links are observed directly, not left to the poll.</li>
+            <li>A re-render that produces the same outline reports nothing. A clock or counter that shows in the outline is reported on every change: leave it out with <code>skip</code>, or set <code>updates: false</code>.</li>
+            <li>When a framework swaps a control for an identical new element, it gets a new ref and the old one stops resolving. <code>watch</code> reports that rather than treat the new element as the old one. <code>find</code> and <code>highlight</code> also accept the control's name.</li>
+          </ul>
           <div class="table-wrap">
             <table>
               <thead><tr><th scope="col">Option</th><th scope="col">Default</th><th scope="col">Purpose</th></tr></thead>
@@ -455,6 +473,7 @@ main
                 <tr><td><code>navigationSettleMs</code></td><td>700</td><td>The same, after the address changed</td></tr>
                 <tr><td><code>throttleMs</code></td><td>150</td><td>Minimum gap between captures while busy</td></tr>
                 <tr><td><code>pollMs</code></td><td>1,500</td><td>Safety poll for changes no mutation reports</td></tr>
+                <tr><td><code>maxWaitMs</code></td><td>2,000</td><td>Longest a change waits for the page to hold still</td></tr>
                 <tr><td><code>updates</code></td><td><code>true</code></td><td>Report plain updates, not only navigation, dialogs and alerts</td></tr>
                 <tr><td><code>initial</code></td><td><code>true</code></td><td>Report the page as it is when watching starts</td></tr>
                 <tr><td><code>path</code></td><td>path and query</td><td>Function that returns the current address</td></tr>
@@ -560,7 +579,8 @@ clickable "Add to bag" [ref=e4]</pre>
             </li>
             <li>
               Open shadow roots, their slots and same-origin frames are read. A
-              frame from another site is listed by its title.
+              frame whose contents can't be read is still listed
+              (<a href="#limits">see below</a>).
             </li>
           </ul>
           <p>
@@ -572,6 +592,100 @@ clickable "Add to bag" [ref=e4]</pre>
             invisible to page script, so a div with one and no pointer cursor
             stays unlisted.
           </p>
+        </section>
+
+        <section id="limits">
+          <h2>Evidence and limits</h2>
+          <p>
+            An outline is selective, not a copy of the page. It says what it
+            saw, marks what it couldn't see, and doesn't fill gaps with
+            guesses.
+          </p>
+
+          <h3 id="limits-validation">Validation and disabled controls</h3>
+          <pre data-outline>
+textbox "Key name" [required, empty, invalid] [ref=e1] — "Shown in your audit log." — error "Enter a key name."
+button "Create key" [disabled] [ref=e7]
+button "Rotate key" [disabled] [ref=e8] — "You need the Admin role to rotate keys."</pre>
+          <p>
+            States in brackets come from the element. The description and the
+            error stay separate, and an <code>aria-errormessage</code> counts
+            only while the control is invalid, so a stale message left in the
+            page isn't reported. A message linked both ways is reported once,
+            as the error. Each referenced ID is read once and in order, a
+            missing ID is skipped, and text inside <code>skip</code>, field
+            values and editable text are never read through a reference.
+          </p>
+          <p>
+            Sightline doesn't connect evidence for you. An empty required field
+            next to a disabled Create button is two facts, and the outline
+            doesn't claim one causes the other. If the reason only lives in
+            your app's state, supply it with <code>annotate</code>:
+          </p>
+          <pre class="code"><code class="ts">createSightline({
+  annotate: (element, role) =&gt;
+    role === 'button' &amp;&amp; element.matches('[type=submit]') &amp;&amp; !form.valid
+      ? `Disabled until ${form.firstMissingField} is filled in`
+      : null,
+});
+// button "Create key" [disabled] [ref=e7] — note "Disabled until Key name is filled in"</code></pre>
+          <p>
+            Notes get the same redaction and length limit as page text.
+            <code>annotate</code> is only called for controls the walk reaches
+            and would list, never for hidden or skipped ones. A hook that
+            throws or returns something other than text adds nothing.
+          </p>
+
+          <h3 id="limits-omitted">What's left out, and how the outline says so</h3>
+          <ul>
+            <li>
+              <strong>Frames.</strong> A frame big enough to be content always
+              gets a line. Without <code>infer</code>:
+              <code>frame "Card number" (contents not included)</code>. With
+              <code>infer</code>, a same-origin frame is read in place and one
+              whose document isn't available reads <code>(contents not
+              readable)</code>, without guessing why. A frame with no title is
+              <code>frame (unnamed, …)</code>. Frames under 60×40 are left out,
+              and after eight frame lines the rest are counted.
+              <code>stats.framesNotRead</code> counts every frame whose
+              contents are missing.
+            </li>
+            <li>
+              <strong>Budgets.</strong> A cut outline says which limit it hit.
+              Invalid fields and alerts the walk didn't reach are then looked
+              up (at most 50 candidates) and listed under <code>Errors and
+              alerts after the cut:</code> in up to a quarter of the budget.
+              Skipped, hidden and background content stays out. If nothing
+              turns up, the outline doesn't claim the rest of the page is free
+              of errors.
+            </li>
+            <li>
+              <strong>Repeated items.</strong> An item holding an invalid field
+              or an alert is kept even when the rest of its run is shortened.
+            </li>
+          </ul>
+          <p>The outline can't see:</p>
+          <ul>
+            <li>Error text that is only styled and neither linked with ARIA nor announced as an alert or status.</li>
+            <li>Paragraph text that doesn't name or describe a control.</li>
+            <li>Why a control is disabled, unless the page or <code>annotate</code> says.</li>
+            <li>Controls a virtualised list hasn't rendered, and closed menus and collapsed sections.</li>
+          </ul>
+          <p>There's no option yet to outline only one region of the page.</p>
+
+          <h3 id="limits-missing">Finding something that isn't listed</h3>
+          <p>
+            Wrappers such as a <code>div</code> around a card or an unlabelled
+            <code>section</code> aren't listed, because they have no role or
+            name; their controls appear under the nearest listed parent. If
+            something meaningful is missing:
+          </p>
+          <ol>
+            <li>Check it has a role and an accessible name. <code>describeElement(element)</code> returns the role and name Sightline sees, or <code>null</code> if it isn't a control.</li>
+            <li>Check it isn't hidden from assistive technology, behind an open modal, or inside your <code>skip</code> selector.</li>
+            <li>For a <code>div</code> with a click handler, or an icon button with no name, try <code>infer: true</code>.</li>
+            <li>If the outline was cut, capture once with a bigger budget: <code>sightline.capture({ maxChars: 20_000 })</code>.</li>
+          </ol>
         </section>
 
         <section id="privacy">
@@ -625,7 +739,7 @@ clickable "Add to bag" [ref=e4]</pre>
         <section id="performance">
           <h2>Performance</h2>
           <p>
-            Measured in Chromium 143 on generated pages (nav, labelled forms, a
+            Measured in Chromium 156 on generated pages (nav, labelled forms, a
             large table, card grids and a dialog), with <code>refs</code> and
             <code>viewport</code> on. Each figure is the median of 20 runs
             after 3 warm-ups (<code>pnpm bench</code>):
@@ -634,19 +748,21 @@ clickable "Add to bag" [ref=e4]</pre>
             <table class="numbers">
               <thead><tr><th scope="col">Elements</th><th scope="col">Median</th><th scope="col">p95</th><th scope="col">Output</th></tr></thead>
               <tbody>
-                <tr><td>515</td><td>0.9 ms</td><td>1.1 ms</td><td>5,971 chars</td></tr>
-                <tr><td>2,015</td><td>0.8 ms</td><td>0.9 ms</td><td>4,661 chars</td></tr>
-                <tr><td>10,015</td><td>0.9 ms</td><td>1.3 ms</td><td>4,661 chars</td></tr>
-                <tr><td>50,015</td><td>1.7 ms</td><td>1.8 ms</td><td>4,662 chars</td></tr>
+                <tr><td>515</td><td>1.1 ms</td><td>1.6 ms</td><td>5,996 chars</td></tr>
+                <tr><td>2,015</td><td>0.8 ms</td><td>1.2 ms</td><td>4,709 chars</td></tr>
+                <tr><td>10,015</td><td>1.1 ms</td><td>1.4 ms</td><td>4,709 chars</td></tr>
+                <tr><td>50,015</td><td>2.6 ms</td><td>2.9 ms</td><td>4,710 chars</td></tr>
               </tbody>
             </table>
           </div>
           <p>
-            Long runs of similar items are counted and skipped, not walked, so
-            cost follows how varied a page is rather than how big it is. With
-            no character cap at all, the 50,000-element page still took 1.7 ms.
-            On real Anam Lab pages an outline took under 6 ms, including the
-            first, unwarmed capture.
+            Long runs of similar items are counted and skipped, not walked.
+            Each shortened run is checked once for invalid fields and alerts
+            with a native selector query, so very large repeated pages cost a
+            little more: in the same setup the 50,000-element page went from
+            1.5 ms to 2.6 ms, with or without a character cap. Before this
+            change, an outline of real Anam Lab pages took under 6 ms,
+            including the first, unwarmed capture.
           </p>
           <p>With <code>infer</code> on, measured on live sites:</p>
           <div class="table-wrap">

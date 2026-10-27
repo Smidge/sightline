@@ -18,7 +18,7 @@ it('returns ordered roles, names, states and consistent statistics', () => {
     `Viewport: ${window.innerWidth}px wide`,
     'main',
     '  h1 "Settings"',
-    '  textbox "Name" [required, empty, invalid] — "Required name"',
+    '  textbox "Name" [required, empty, invalid] — error "Required name"',
     '  checkbox "Consent" [checked]',
     '  button "More" [collapsed, opens menu, disabled]',
     '  switch "Audio" [on]',
@@ -29,6 +29,8 @@ it('returns ordered roles, names, states and consistent statistics', () => {
     lines: result.lines.length,
     controls: 4,
     truncated: false,
+    truncatedBy: null,
+    framesNotRead: 0,
   });
   expect(result.stats.visited).toBeGreaterThan(4);
   expect(result.stats.ms).toBeGreaterThanOrEqual(0);
@@ -152,11 +154,19 @@ it('caps output with the truncation marker and reports element-budget exhaustion
   ).join('');
   const result = outline(document, { header: false, maxChars: 150 })!;
   expect(result.text.length).toBeLessThanOrEqual(150);
-  expect(result.text.endsWith('… (outline truncated)')).toBe(true);
-  expect(result.stats.truncated).toBe(true);
-  expect(
-    outline(document, { header: false, maxElements: 3 })?.stats.truncated,
-  ).toBe(true);
+  expect(result.text.endsWith('… (outline truncated: character limit)')).toBe(
+    true,
+  );
+  expect(result.stats).toMatchObject({
+    truncated: true,
+    truncatedBy: 'characters',
+  });
+  const short = outline(document, { header: false, maxElements: 3 })!;
+  expect(short.stats).toMatchObject({
+    truncated: true,
+    truncatedBy: 'elements',
+  });
+  expect(short.lines.at(-1)).toBe('… (outline truncated: element limit)');
 });
 
 it('returns null when there is no useful content', () => {

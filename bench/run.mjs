@@ -57,7 +57,10 @@ try {
   execFileSync(
     esbuild,
     [
-      path.join(root, 'packages/sightline/src/index.ts'),
+      process.env.SIGHTLINE_SRC ??
+        (existsSync(path.join(packageRoot, 'src/index.ts'))
+          ? path.join(packageRoot, 'src/index.ts')
+          : path.join(root, 'packages/sightline/src/index.ts')),
       '--bundle',
       '--format=iife',
       '--global-name=Sightline',
@@ -67,7 +70,10 @@ try {
     { stdio: 'pipe' },
   );
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: process.env.CHROME_PATH || undefined,
+    });
   } catch (error) {
     if (/Executable doesn't exist|browser.*not found/i.test(error.message)) {
       throw new Error(

@@ -139,6 +139,25 @@ describe('tokenize', () => {
     ]);
   });
 
+  it('marks errors, notes and coverage notes', () => {
+    expect(kinds('textbox "Key" [invalid] — "Hint." — error "Enter a key."')).toEqual([
+      'role:textbox',
+      'name:"Key"',
+      'state:[invalid]',
+      'dash: — ',
+      'name:"Hint."',
+      'dash: — error ',
+      'name:"Enter a key."',
+    ]);
+    expect(kinds('frame (unnamed, contents not readable)')).toEqual([
+      'role:frame',
+      'note:(unnamed, contents not readable)',
+    ]);
+    expect(kinds('… (outline truncated: character limit)')).toEqual([
+      'note:(outline truncated: character limit)',
+    ]);
+  });
+
   it('keeps every character', () => {
     const line = 'table: columns Name | Key; 9 rows';
     expect(tokenize(line).map((token) => token.text).join('')).toBe(line);
