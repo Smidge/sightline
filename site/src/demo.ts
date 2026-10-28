@@ -1,5 +1,6 @@
 import { createSightline, type Outline, type Sightline } from '../../src/index.js';
 import { highlightCode } from './code.js';
+import { showStars } from './stars.js';
 import { copyButtons } from './copy.js';
 import {
   focusRow,
@@ -393,6 +394,7 @@ copyButtons(document, (name) => (name === 'outline' ? (outlines[view]?.text ?? '
 new ResizeObserver(() => page && fitFrame()).observe(stage.parentElement!);
 markStaticOutlines();
 highlightCode();
+void showStars();
 
 // Shared links open with the page already read; otherwise show the sample.
 const initial = new URLSearchParams(location.search);
